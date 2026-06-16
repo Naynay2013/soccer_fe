@@ -780,7 +780,53 @@ function StadiumScene({ setup, running }) {
       scene.add(stripe);
     }
 
-    const lineMaterial = new THREE.MeshBasicMaterial({ color: "#f4fff8", transparent: true, opacity: 0.88 });
+    const lineMaterial = new THREE.MeshBasicMaterial({ color: "#f4fff8", transparent: true, opacity: 0.98 });
+    const addPitchLine = (x, y, z, w, h, d) => {
+      const line = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lineMaterial);
+      line.position.set(x, y, z);
+      scene.add(line);
+      return line;
+    };
+    const addPenaltySpot = (z) => {
+      const spot = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.08, 24), lineMaterial);
+      spot.position.set(0, 0.2, z);
+      scene.add(spot);
+    };
+    const addCornerArc = (x, z, rot) => {
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.16, 8, 28, Math.PI / 2), lineMaterial);
+      arc.rotation.set(Math.PI / 2, 0, rot);
+      arc.position.set(x, 0.24, z);
+      scene.add(arc);
+    };
+    const addGoal = (z, side) => {
+      const goal = new THREE.Group();
+      const postMaterial = new THREE.MeshStandardMaterial({ color: 0xf4fff8, roughness: 0.32, metalness: 0.18 });
+      const netMaterial = new THREE.MeshBasicMaterial({ color: 0xdffff1, transparent: true, opacity: 0.2, wireframe: true });
+      [-1, 1].forEach((postSide) => {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 4.8, 16), postMaterial);
+        post.position.set(postSide * 9.5, 2.35, z);
+        goal.add(post);
+      });
+      const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 19.4, 16), postMaterial);
+      crossbar.rotation.z = Math.PI / 2;
+      crossbar.position.set(0, 4.75, z);
+      goal.add(crossbar);
+      const backBar = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 19.4, 12), postMaterial);
+      backBar.rotation.z = Math.PI / 2;
+      backBar.position.set(0, 4.2, z + side * 5.6);
+      goal.add(backBar);
+      const rearNet = new THREE.Mesh(new THREE.PlaneGeometry(19.8, 4.5, 8, 4), netMaterial);
+      rearNet.position.set(0, 2.35, z + side * 5.8);
+      rearNet.rotation.y = Math.PI;
+      goal.add(rearNet);
+      [-1, 1].forEach((netSide) => {
+        const sideNet = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 4.5, 4, 4), netMaterial);
+        sideNet.position.set(netSide * 9.9, 2.35, z + side * 2.9);
+        sideNet.rotation.y = Math.PI / 2;
+        goal.add(sideNet);
+      });
+      scene.add(goal);
+    };
     [
       [0, 0.05, 0, 0.22, 0.1, 126],
       [-44, 0.06, 0, 0.28, 0.1, 126],
@@ -789,10 +835,26 @@ function StadiumScene({ setup, running }) {
       [0, 0.07, 63, 88, 0.1, 0.28],
       [0, 0.08, 0, 88, 0.1, 0.18]
     ].forEach(([x, y, z, w, h, d]) => {
-      const line = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lineMaterial);
-      line.position.set(x, y, z);
-      scene.add(line);
+      addPitchLine(x, y, z, w, h, d);
     });
+
+    [-1, 1].forEach((side) => {
+      const goalLine = side * 63;
+      const penaltyLine = side * 43;
+      const goalBoxLine = side * 55;
+      addPitchLine(0, 0.1, penaltyLine, 44, 0.1, 0.32);
+      addPitchLine(-22, 0.1, side * 53, 0.32, 0.1, 20);
+      addPitchLine(22, 0.1, side * 53, 0.32, 0.1, 20);
+      addPitchLine(0, 0.11, goalBoxLine, 22, 0.1, 0.32);
+      addPitchLine(-11, 0.11, side * 59, 0.32, 0.1, 8);
+      addPitchLine(11, 0.11, side * 59, 0.32, 0.1, 8);
+      addPenaltySpot(side * 51);
+      addGoal(goalLine + side * 0.3, side);
+    });
+    addCornerArc(-44, -63, 0);
+    addCornerArc(44, -63, Math.PI / 2);
+    addCornerArc(44, 63, Math.PI);
+    addCornerArc(-44, 63, -Math.PI / 2);
 
     const centerRing = new THREE.Mesh(
       new THREE.TorusGeometry(12, 0.22, 8, 88),
@@ -889,6 +951,20 @@ function StadiumScene({ setup, running }) {
       human.userData.phase = index * 0.8;
       scene.add(human);
     });
+
+    const referee = makeHumanPlayer(
+      { displayName: "Referee", jerseyNumber: 0, team: "REF", skinTone: "#b87455" },
+      { primaryHex: "#111111", trimHex: "#f7ff4c", accentHex: "#111111" },
+      -6,
+      10,
+      12
+    );
+    referee.scale.setScalar(1.28);
+    referee.rotation.y = Math.PI * 0.18;
+    referee.userData.baseY = referee.position.y;
+    referee.userData.phase = 4.8;
+    animatedObjects.push(referee);
+    scene.add(referee);
 
     const ball = new THREE.Mesh(
       new THREE.SphereGeometry(1.25, 24, 24),
