@@ -594,50 +594,124 @@ function makeHumanPlayer(player, jersey, x, z) {
   const group = new THREE.Group();
   const shirt = jersey?.primaryHex ?? (player.team === "GOLD" ? "#ffd447" : "#58a8ff");
   const trim = jersey?.trimHex ?? "#ffffff";
+  const accent = jersey?.accentHex ?? "#111111";
   const skin = player.skinTone ?? "#a66f4d";
-  const shirtMaterial = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.48, metalness: 0.04 });
-  const trimMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.5 });
-  const skinMaterial = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.62 });
-  const darkMaterial = new THREE.MeshStandardMaterial({ color: "#141414", roughness: 0.7 });
+  const shirtMaterial = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.42, metalness: 0.06 });
+  const shortsMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.5, metalness: 0.04 });
+  const trimMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.42 });
+  const skinMaterial = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.52 });
+  const hairMaterial = new THREE.MeshStandardMaterial({ color: "#15110d", roughness: 0.78 });
+  const eyeWhite = new THREE.MeshBasicMaterial({ color: "#fffaf1" });
+  const eyeDark = new THREE.MeshBasicMaterial({ color: "#161616" });
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(1.8, 3.4, 6, 14), shirtMaterial);
-  torso.position.y = 4.4;
-  torso.scale.set(0.86, 1, 0.62);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(1.35, 2.7, 8, 18), shirtMaterial);
+  torso.position.y = 4.75;
+  torso.scale.set(1.18, 1, 0.72);
   group.add(torso);
 
+  const chestStripe = new THREE.Mesh(new THREE.BoxGeometry(2.65, 0.2, 0.12), trimMaterial);
+  chestStripe.position.set(0, 5.35, 1.04);
+  group.add(chestStripe);
+
+  const shorts = new THREE.Mesh(new THREE.BoxGeometry(2.75, 1.18, 1.35), shortsMaterial);
+  shorts.position.y = 2.75;
+  group.add(shorts);
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.42, 0.55, 16), skinMaterial);
+  neck.position.y = 6.45;
+  group.add(neck);
+
   const number = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.2, 2.2),
+    new THREE.PlaneGeometry(2.3, 2.3),
     new THREE.MeshBasicMaterial({ map: createNumberTexture(player.jerseyNumber, shirt, trim), transparent: true })
   );
-  number.position.set(0, 4.75, 0.98);
+  number.position.set(0, 4.95, 1.16);
   group.add(number);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(1.04, 20, 20), skinMaterial);
-  head.position.y = 7.25;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.08, 28, 24), skinMaterial);
+  head.position.y = 7.35;
+  head.scale.set(0.88, 1.05, 0.82);
   group.add(head);
 
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(1.06, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.48), darkMaterial);
-  hair.position.y = 7.78;
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(1.02, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.54), hairMaterial);
+  hair.position.set(0, 7.92, -0.04);
+  hair.scale.set(0.94, 0.72, 0.9);
   group.add(hair);
 
+  for (let i = -2; i <= 2; i += 1) {
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.72, 8), hairMaterial);
+    spike.position.set(i * 0.28, 8.35 - Math.abs(i) * 0.07, 0.16);
+    spike.rotation.x = -0.45;
+    spike.rotation.z = i * 0.08;
+    group.add(spike);
+  }
+
   [-1, 1].forEach((side) => {
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 2.8, 6, 10), skinMaterial);
-    arm.position.set(side * 1.65, 4.55, 0.05);
-    arm.rotation.z = side * 0.38;
-    group.add(arm);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), skinMaterial);
+    ear.position.set(side * 0.88, 7.35, 0.05);
+    group.add(ear);
 
-    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.44, 2.8, 6, 10), darkMaterial);
-    leg.position.set(side * 0.54, 1.8, 0);
-    leg.rotation.z = side * 0.08;
-    group.add(leg);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), eyeWhite);
+    eye.position.set(side * 0.32, 7.45, 0.83);
+    group.add(eye);
 
-    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.36, 1.35), trimMaterial);
-    boot.position.set(side * 0.54, 0.22, 0.18);
-    group.add(boot);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), eyeDark);
+    pupil.position.set(side * 0.33, 7.42, 0.96);
+    group.add(pupil);
+
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.07, 0.08), hairMaterial);
+    brow.position.set(side * 0.32, 7.72, 0.88);
+    brow.rotation.z = -side * 0.1;
+    group.add(brow);
+  });
+
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.42, 10), skinMaterial);
+  nose.position.set(0, 7.25, 0.98);
+  nose.rotation.x = Math.PI / 2;
+  group.add(nose);
+
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.025, 6, 20, Math.PI), eyeDark);
+  smile.position.set(0, 7.02, 0.91);
+  smile.rotation.set(0, 0, Math.PI);
+  group.add(smile);
+
+  const rig = { arms: [], legs: [] };
+  [-1, 1].forEach((side) => {
+    const armGroup = new THREE.Group();
+    armGroup.position.set(side * 1.5, 5.55, 0.02);
+    armGroup.rotation.z = side * 0.34;
+    const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.72, 6, 10), shirtMaterial);
+    sleeve.position.y = -0.38;
+    armGroup.add(sleeve);
+    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 1.65, 6, 10), skinMaterial);
+    forearm.position.y = -1.55;
+    armGroup.add(forearm);
+    const wrist = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 10), skinMaterial);
+    wrist.position.y = -2.5;
+    armGroup.add(wrist);
+    rig.arms.push({ group: armGroup, side });
+    group.add(armGroup);
+
+    const legGroup = new THREE.Group();
+    legGroup.position.set(side * 0.64, 2.42, 0);
+    legGroup.rotation.z = side * 0.08;
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.37, 1.5, 6, 10), skinMaterial);
+    thigh.position.y = -0.7;
+    legGroup.add(thigh);
+    const sock = new THREE.Mesh(new THREE.CapsuleGeometry(0.31, 1.4, 6, 10), trimMaterial);
+    sock.position.y = -1.92;
+    legGroup.add(sock);
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.32, 1.18), shortsMaterial);
+    boot.position.set(0, -2.75, 0.22);
+    boot.rotation.x = -0.08;
+    legGroup.add(boot);
+    rig.legs.push({ group: legGroup, side });
+    group.add(legGroup);
   });
 
   group.position.set(x, 0, z);
-  group.rotation.y = player.team === "GOLD" ? Math.PI * 0.04 : Math.PI;
+  group.rotation.y = player.team === "GOLD" ? Math.PI * 0.02 : Math.PI;
+  group.userData.rig = rig;
   return group;
 }
 
@@ -667,8 +741,8 @@ function StadiumScene({ setup, running }) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
-    camera.position.set(0, 64, 108);
-    camera.lookAt(0, 5, -8);
+    camera.position.set(0, 34, 74);
+    camera.lookAt(0, 7, -7);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.48));
     const keyLight = new THREE.DirectionalLight(accent, 1.6);
@@ -788,13 +862,15 @@ function StadiumScene({ setup, running }) {
       { displayName: "Andre Silva", jerseyNumber: 11, team: "BLUE", skinTone: "#a66f4d" },
       { displayName: "Milan Fox", jerseyNumber: 8, team: "BLUE", skinTone: "#c88b62" }
     ];
-    const positions = [[-20, -16], [-8, 18], [17, -12], [26, 22], [-32, 36], [34, -36], [0, -34], [0, 34]];
+    const positions = [[-18, -28], [-5, -8], [15, -20], [27, 6], [-28, 20], [30, 30], [0, -40], [0, 38]];
     selectedRoster.slice(0, 8).forEach((player, index) => {
       const [x, z] = positions[index] ?? [0, 0];
       const human = makeHumanPlayer(player, player.team === "GOLD" ? goldJersey : blueJersey, x, z);
-      human.scale.setScalar(1.25);
+      human.scale.setScalar(index < 4 ? 2.15 : 1.82);
+      human.rotation.y += index % 2 === 0 ? -0.24 : 0.22;
       animatedObjects.push(human);
       human.userData.baseY = human.position.y;
+      human.userData.phase = index * 0.8;
       scene.add(human);
     });
 
@@ -828,7 +904,20 @@ function StadiumScene({ setup, running }) {
       ballStripe.position.copy(ball.position);
       ballStripe.rotation.z += 0.05;
       animatedObjects.forEach((object, index) => {
-        object.position.y = object.userData.baseY + Math.sin(time * 2 + index) * (running ? 0.18 : 0.05);
+        const phase = object.userData.phase ?? index;
+        object.position.y = object.userData.baseY + Math.sin(time * 2.4 + phase) * (running ? 0.22 : 0.05);
+        if (object.userData.rig) {
+          const stride = Math.sin(time * (running ? 5.2 : 1.8) + phase);
+          object.rotation.z = Math.sin(time * 2 + phase) * (running ? 0.025 : 0.008);
+          object.userData.rig.arms.forEach(({ group, side }) => {
+            group.rotation.x = stride * side * (running ? 0.72 : 0.18);
+            group.rotation.z = side * 0.38;
+          });
+          object.userData.rig.legs.forEach(({ group, side }) => {
+            group.rotation.x = -stride * side * (running ? 0.82 : 0.16);
+            group.rotation.z = side * 0.08;
+          });
+        }
       });
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
