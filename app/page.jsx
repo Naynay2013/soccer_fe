@@ -82,14 +82,14 @@ function createGame(width, height) {
     activePlayerIndex: 0,
     ball: { x: width / 2, y: height / 2, vx: 0, vy: 0, radius: 9 },
     players: [
-      newPlayer("gold", "Striker", width * 0.31, height * 0.5, true),
-      newPlayer("gold", "Wing", width * 0.22, height * 0.28),
-      newPlayer("gold", "Wing", width * 0.22, height * 0.72),
-      newPlayer("gold", "Keeper", width * 0.08, height * 0.5),
-      newPlayer("blue", "Striker", width * 0.69, height * 0.5),
-      newPlayer("blue", "Wing", width * 0.78, height * 0.28),
-      newPlayer("blue", "Wing", width * 0.78, height * 0.72),
-      newPlayer("blue", "Keeper", width * 0.92, height * 0.5)
+      newPlayer("gold", "Striker", width * 0.5, height * 0.66, true),
+      newPlayer("gold", "Wing", width * 0.31, height * 0.72),
+      newPlayer("gold", "Wing", width * 0.69, height * 0.72),
+      newPlayer("gold", "Keeper", width * 0.5, height * 0.9),
+      newPlayer("blue", "Striker", width * 0.5, height * 0.34),
+      newPlayer("blue", "Wing", width * 0.31, height * 0.28),
+      newPlayer("blue", "Wing", width * 0.69, height * 0.28),
+      newPlayer("blue", "Keeper", width * 0.5, height * 0.1)
     ]
   };
 }
@@ -100,8 +100,8 @@ function resetFormation(game, direction = 0) {
   game.activePlayerIndex = fresh.activePlayerIndex;
   game.ball.x = game.width / 2;
   game.ball.y = game.height / 2;
-  game.ball.vx = direction * 230;
-  game.ball.vy = 0;
+  game.ball.vx = 0;
+  game.ball.vy = direction * 230;
 }
 
 function activePlayer(game) {
@@ -253,9 +253,9 @@ function collideBall(player, ball) {
 }
 
 function updateAi(game, player, dt, playerIndex = 0) {
-  const attacking = player.team === "gold" ? 1 : -1;
-  const ownGoal = player.team === "gold" ? 0 : game.width;
-  const targetGoal = player.team === "gold" ? game.width : 0;
+  const attacking = player.team === "gold" ? -1 : 1;
+  const ownGoal = player.team === "gold" ? game.height : 0;
+  const targetGoal = player.team === "gold" ? 0 : game.height;
   const ball = game.ball;
   const active = activePlayer(game);
   const sameTeam = player.team === controlledTeam;
@@ -271,26 +271,26 @@ function updateAi(game, player, dt, playerIndex = 0) {
   let ty = player.homeY;
 
   if (player.role === "Keeper") {
-    tx = ownGoal + attacking * 52;
-    ty = clamp(ball.y * 0.45 + game.height * 0.5 * 0.55, game.height * 0.34, game.height * 0.66);
+    tx = clamp(ball.x * 0.45 + game.width * 0.5 * 0.55, game.width * 0.34, game.width * 0.66);
+    ty = ownGoal + attacking * 52;
   } else if (sameTeam) {
     const teamHasBall = Math.hypot(active.x - ball.x, active.y - ball.y) < 70;
     if (player.role === "Striker") {
-      tx = clamp(Math.max(active.x, ball.x) + attacking * (teamHasBall ? 150 : 85), game.width * 0.16, game.width * 0.84);
-      ty = clamp(game.height * 0.5 + Math.sin(performance.now() / 1600 + playerIndex) * 48, game.height * 0.3, game.height * 0.7);
+      tx = clamp(game.width * 0.5 + Math.sin(performance.now() / 1600 + playerIndex) * 58, game.width * 0.25, game.width * 0.75);
+      ty = clamp(Math.min(active.y, ball.y) + attacking * (teamHasBall ? 115 : 70), game.height * 0.16, game.height * 0.84);
     } else {
-      tx = clamp(active.x + attacking * 80, game.width * 0.14, game.width * 0.78);
-      ty = clamp(game.height * (laneOffset < 0 ? 0.26 : 0.74), game.height * 0.18, game.height * 0.82);
+      tx = clamp(game.width * (laneOffset < 0 ? 0.25 : 0.75), game.width * 0.16, game.width * 0.84);
+      ty = clamp(active.y + attacking * 74, game.height * 0.16, game.height * 0.84);
     }
-  } else if (isPresser && Math.abs(ball.x - player.x) < game.width * 0.46) {
-    tx = ball.x - attacking * 22;
-    ty = ball.y;
+  } else if (isPresser && Math.abs(ball.y - player.y) < game.height * 0.46) {
+    tx = ball.x;
+    ty = ball.y - attacking * 22;
   } else if (player.role === "Striker") {
-    tx = clamp(ball.x - attacking * 95, game.width * 0.18, game.width * 0.82);
-    ty = clamp(game.height * 0.5, game.height * 0.28, game.height * 0.72);
+    tx = clamp(game.width * 0.5, game.width * 0.28, game.width * 0.72);
+    ty = clamp(ball.y - attacking * 95, game.height * 0.18, game.height * 0.82);
   } else {
-    tx = clamp(player.homeX - attacking * 24, game.width * 0.18, game.width * 0.88);
-    ty = clamp(player.homeY + Math.sin(performance.now() / 1800 + player.homeY) * 18, game.height * 0.2, game.height * 0.8);
+    tx = clamp(player.homeX + Math.sin(performance.now() / 1800 + player.homeX) * 18, game.width * 0.2, game.width * 0.8);
+    ty = clamp(player.homeY - attacking * 24, game.height * 0.18, game.height * 0.88);
   }
 
   const dx = tx - player.x;
@@ -309,8 +309,8 @@ function updateAi(game, player, dt, playerIndex = 0) {
 
   const close = Math.hypot(ball.x - player.x, ball.y - player.y) < player.radius + ball.radius + 8;
   if (close && player.cooldown <= 0 && (isPresser || sameTeam)) {
-    const gx = targetGoal - player.x;
-    const gy = game.height * 0.5 - player.y;
+    const gx = game.width * 0.5 - player.x;
+    const gy = targetGoal - player.y;
     const gd = length(gx, gy);
     ball.vx += (gx / gd) * 285;
     ball.vy += (gy / gd) * 285 + (Math.random() - 0.5) * 90;
@@ -427,8 +427,8 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       const pointer = pointerRef.current;
       const distance = Math.hypot(ball.x - player.x, ball.y - player.y);
       if (distance > player.radius + ball.radius + 28 || player.cooldown > 0) return;
-      const aimX = pointer.active ? pointer.x : game.width;
-      const aimY = pointer.active ? pointer.y : game.height / 2;
+      const aimX = pointer.active ? pointer.x : game.width / 2;
+      const aimY = pointer.active ? pointer.y : player.team === "gold" ? 0 : game.height;
       const dx = aimX - ball.x;
       const dy = aimY - ball.y;
       const d = length(dx, dy);
@@ -507,8 +507,8 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       const pointer = pointerRef.current;
       const distance = Math.hypot(ball.x - player.x, ball.y - player.y);
       if (distance > player.radius + ball.radius + 28 || player.cooldown > 0) return;
-      const aimX = pointer.active ? pointer.x : game.width;
-      const aimY = pointer.active ? pointer.y : game.height / 2;
+      const aimX = pointer.active ? pointer.x : game.width / 2;
+      const aimY = pointer.active ? pointer.y : player.team === "gold" ? 0 : game.height;
       const dx = aimX - ball.x;
       const dy = aimY - ball.y;
       const d = length(dx, dy);
@@ -588,17 +588,18 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       game.ball.vy *= Math.pow(0.22, dt);
       game.players.forEach((player) => collideBall(player, game.ball));
 
-      const goalTop = game.height * 0.36;
-      const goalBottom = game.height * 0.64;
-      if (game.ball.x < -game.ball.radius && game.ball.y > goalTop && game.ball.y < goalBottom) {
-        game.score.blue += 1;
-        game.status = "Goal: Blue United";
+      const goalLeft = game.width * 0.39;
+      const goalRight = game.width * 0.61;
+      const inGoalMouth = game.ball.x > goalLeft && game.ball.x < goalRight;
+      if (game.ball.y < -game.ball.radius && inGoalMouth) {
+        game.score.gold += 1;
+        game.status = "Goal: Yellow FC";
         game.statusUntil = performance.now() + 1600;
         resetFormation(game, 1);
         onScore({ ...game.score });
-      } else if (game.ball.x > game.width + game.ball.radius && game.ball.y > goalTop && game.ball.y < goalBottom) {
-        game.score.gold += 1;
-        game.status = "Goal: Yellow FC";
+      } else if (game.ball.y > game.height + game.ball.radius && inGoalMouth) {
+        game.score.blue += 1;
+        game.status = "Goal: Blue United";
         game.statusUntil = performance.now() + 1600;
         resetFormation(game, -1);
         onScore({ ...game.score });
@@ -607,7 +608,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
           game.ball.x = clamp(game.ball.x, game.ball.radius, game.width - game.ball.radius);
           game.ball.vx *= -0.74;
         }
-        if (game.ball.y < game.ball.radius || game.ball.y > game.height - game.ball.radius) {
+        if ((game.ball.y < game.ball.radius || game.ball.y > game.height - game.ball.radius) && !inGoalMouth) {
           game.ball.y = clamp(game.ball.y, game.ball.radius, game.height - game.ball.radius);
           game.ball.vy *= -0.74;
         }
