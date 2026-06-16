@@ -252,33 +252,55 @@ function collideBall(player, ball) {
   ball.vy += ny * 120 + player.vy * 0.82;
 }
 
-function updateAi(game, player, dt) {
+function updateAi(game, player, dt, playerIndex = 0) {
   const attacking = player.team === "gold" ? 1 : -1;
   const ownGoal = player.team === "gold" ? 0 : game.width;
   const targetGoal = player.team === "gold" ? game.width : 0;
   const ball = game.ball;
-  const ballNearTeam = player.team === "gold" ? ball.x < game.width * 0.6 : ball.x > game.width * 0.4;
+  const active = activePlayer(game);
+  const sameTeam = player.team === controlledTeam;
+  const teamPlayers = game.players
+    .map((candidate, index) => ({ candidate, index }))
+    .filter(({ candidate }) => candidate.team === player.team && candidate.role !== "Keeper");
+  const closestToBall = teamPlayers
+    .slice()
+    .sort((a, b) => Math.hypot(a.candidate.x - ball.x, a.candidate.y - ball.y) - Math.hypot(b.candidate.x - ball.x, b.candidate.y - ball.y))[0];
+  const isPresser = closestToBall?.index === playerIndex;
+  const laneOffset = player.role === "Wing" ? (player.homeY < game.height / 2 ? -1 : 1) : 0;
   let tx = player.homeX;
   let ty = player.homeY;
 
   if (player.role === "Keeper") {
-    tx = ownGoal + attacking * 58;
-    ty = clamp(ball.y, game.height * 0.34, game.height * 0.66);
-  } else if (ballNearTeam || player.role === "Striker") {
-    tx = ball.x - attacking * 18;
+    tx = ownGoal + attacking * 52;
+    ty = clamp(ball.y * 0.45 + game.height * 0.5 * 0.55, game.height * 0.34, game.height * 0.66);
+  } else if (sameTeam) {
+    const teamHasBall = Math.hypot(active.x - ball.x, active.y - ball.y) < 70;
+    if (player.role === "Striker") {
+      tx = clamp(Math.max(active.x, ball.x) + attacking * (teamHasBall ? 150 : 85), game.width * 0.16, game.width * 0.84);
+      ty = clamp(game.height * 0.5 + Math.sin(performance.now() / 1600 + playerIndex) * 48, game.height * 0.3, game.height * 0.7);
+    } else {
+      tx = clamp(active.x + attacking * 80, game.width * 0.14, game.width * 0.78);
+      ty = clamp(game.height * (laneOffset < 0 ? 0.26 : 0.74), game.height * 0.18, game.height * 0.82);
+    }
+  } else if (isPresser && Math.abs(ball.x - player.x) < game.width * 0.46) {
+    tx = ball.x - attacking * 22;
     ty = ball.y;
+  } else if (player.role === "Striker") {
+    tx = clamp(ball.x - attacking * 95, game.width * 0.18, game.width * 0.82);
+    ty = clamp(game.height * 0.5, game.height * 0.28, game.height * 0.72);
   } else {
-    tx = player.homeX + attacking * 78;
-    ty = player.homeY + Math.sin(performance.now() / 850 + player.homeY) * 34;
+    tx = clamp(player.homeX - attacking * 24, game.width * 0.18, game.width * 0.88);
+    ty = clamp(player.homeY + Math.sin(performance.now() / 1800 + player.homeY) * 18, game.height * 0.2, game.height * 0.8);
   }
 
   const dx = tx - player.x;
   const dy = ty - player.y;
   const d = length(dx, dy);
-  player.vx += (dx / d) * 760 * dt;
-  player.vy += (dy / d) * 760 * dt;
+  const urgency = isPresser && !sameTeam ? 1.12 : player.role === "Keeper" ? 0.72 : 0.86;
+  player.vx += (dx / d) * 520 * urgency * dt;
+  player.vy += (dy / d) * 520 * urgency * dt;
 
-  const maxSpeed = player.role === "Keeper" ? 186 : 220;
+  const maxSpeed = player.role === "Keeper" ? 150 : isPresser && !sameTeam ? 205 : 172;
   const speed = Math.hypot(player.vx, player.vy);
   if (speed > maxSpeed) {
     player.vx = (player.vx / speed) * maxSpeed;
@@ -286,7 +308,7 @@ function updateAi(game, player, dt) {
   }
 
   const close = Math.hypot(ball.x - player.x, ball.y - player.y) < player.radius + ball.radius + 8;
-  if (close && player.cooldown <= 0) {
+  if (close && player.cooldown <= 0 && (isPresser || sameTeam)) {
     const gx = targetGoal - player.x;
     const gy = game.height * 0.5 - player.y;
     const gd = length(gx, gy);
@@ -531,15 +553,15 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       if (ix || iy) {
         const d = length(ix, iy);
         const sprint = keys.has("shift") || performance.now() < sprintBoostRef.current ? 1.45 : 1;
-        user.vx += (ix / d) * 930 * sprint * dt;
-        user.vy += (iy / d) * 930 * sprint * dt;
+        user.vx += (ix / d) * 690 * sprint * dt;
+        user.vy += (iy / d) * 690 * sprint * dt;
       }
 
-      for (const player of game.players) {
+      for (const [index, player] of game.players.entries()) {
         const isActive = player === user;
-        if (!isActive) updateAi(game, player, dt);
+        if (!isActive) updateAi(game, player, dt, index);
         const boosting = isActive && (keys.has("shift") || performance.now() < sprintBoostRef.current);
-        const maxSpeed = boosting ? 350 : isActive ? 250 : 230;
+        const maxSpeed = boosting ? 310 : isActive ? 220 : 190;
         const speed = Math.hypot(player.vx, player.vy);
         if (speed > maxSpeed) {
           player.vx = (player.vx / speed) * maxSpeed;
@@ -547,8 +569,8 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
         }
         player.x += player.vx * dt;
         player.y += player.vy * dt;
-        player.vx *= Math.pow(0.035, dt);
-        player.vy *= Math.pow(0.035, dt);
+        player.vx *= Math.pow(0.055, dt);
+        player.vy *= Math.pow(0.055, dt);
         player.cooldown = Math.max(0, player.cooldown - dt);
         player.x = clamp(player.x, player.radius + 6, game.width - player.radius - 6);
         player.y = clamp(player.y, player.radius + 6, game.height - player.radius - 6);
@@ -1201,15 +1223,15 @@ function StadiumScene({ setup, running, gameStateRef }) {
         object.position.y = object.userData.baseY + Math.sin(time * 2.4 + phase) * (running ? 0.22 : 0.05);
         if (object.userData.rig) {
           const simPlayer = Number.isInteger(object.userData.gameIndex) ? gameSnapshot?.players?.[object.userData.gameIndex] : null;
-          let motion = running ? 0.55 : 0.25;
-          let stride = Math.sin(time * (running ? 3.4 : 1.8) + phase);
+          let motion = running ? 0.42 : 0.18;
+          let stride = Math.sin(time * (running ? 2.1 : 1.15) + phase);
           if (simPlayer) {
             const next = toField(simPlayer.x, simPlayer.y, gameSnapshot.width, gameSnapshot.height);
             const velocity = Math.hypot(simPlayer.vx, simPlayer.vy);
-            motion = THREE.MathUtils.clamp(velocity / 180, 0.12, 1.35);
-            stride = Math.sin(time * (3.2 + motion * 4.8) + phase);
-            object.position.x = THREE.MathUtils.lerp(object.position.x, next.x, 0.24);
-            object.position.z = THREE.MathUtils.lerp(object.position.z, next.z, 0.24);
+            motion = THREE.MathUtils.clamp(velocity / 220, 0.08, 0.95);
+            stride = Math.sin(time * (1.65 + motion * 2.65) + phase);
+            object.position.x = THREE.MathUtils.lerp(object.position.x, next.x, 0.18);
+            object.position.z = THREE.MathUtils.lerp(object.position.z, next.z, 0.18);
             object.userData.lastFieldX = next.x;
             object.userData.lastFieldZ = next.z;
           } else {
@@ -1222,11 +1244,11 @@ function StadiumScene({ setup, running, gameStateRef }) {
             : Math.atan2(ball.position.x - object.position.x, ball.position.z - object.position.z);
           object.rotation.y = THREE.MathUtils.lerp(object.rotation.y, faceAngle, 0.04);
           object.userData.rig.arms.forEach(({ group, side }) => {
-            group.rotation.x = stride * side * motion * 0.72;
-            group.rotation.z = side * 0.26;
+            group.rotation.x = stride * side * motion * 0.48;
+            group.rotation.z = side * 0.22;
           });
           object.userData.rig.legs.forEach(({ group, side }) => {
-            group.rotation.x = -stride * side * motion * 0.82;
+            group.rotation.x = -stride * side * motion * 0.55;
             group.rotation.z = side * 0.05;
           });
         }
