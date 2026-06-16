@@ -288,16 +288,23 @@ function updateAi(game, player, dt) {
   }
 }
 
-function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetToken }) {
+function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetToken, actionCommand }) {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
   const keysRef = useRef(new Set());
   const pointerRef = useRef({ active: false, x: 0, y: 0 });
   const runningRef = useRef(running);
+  const sprintBoostRef = useRef(0);
+  const actionHandlerRef = useRef(null);
 
   useEffect(() => {
     runningRef.current = running;
   }, [running]);
+
+  useEffect(() => {
+    if (!actionCommand || !actionHandlerRef.current) return;
+    actionHandlerRef.current(actionCommand.action);
+  }, [actionCommand]);
 
   useEffect(() => {
     if (!gameRef.current) return;
@@ -340,7 +347,90 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       }
     };
 
+    const getUserAndBall = () => {
+      const game = gameRef.current;
+      return { game, player: game.players.find((candidate) => candidate.user), ball: game.ball };
+    };
+
     const shoot = () => {
+      const { game, player, ball } = getUserAndBall();
+      if (!player) return;
+      const pointer = pointerRef.current;
+      const distance = Math.hypot(ball.x - player.x, ball.y - player.y);
+      if (distance > player.radius + ball.radius + 28 || player.cooldown > 0) return;
+      const aimX = pointer.active ? pointer.x : game.width;
+      const aimY = pointer.active ? pointer.y : game.height / 2;
+      const dx = aimX - ball.x;
+      const dy = aimY - ball.y;
+      const d = length(dx, dy);
+      ball.vx = (dx / d) * 650;
+      ball.vy = (dy / d) * 650;
+      player.cooldown = 0.42;
+      onStatus("Shot taken");
+    };
+
+    const pass = () => {
+      const { game, player, ball } = getUserAndBall();
+      if (!player) return;
+      const distance = Math.hypot(ball.x - player.x, ball.y - player.y);
+      if (distance > player.radius + ball.radius + 34 || player.cooldown > 0) return;
+      const teammate = game.players
+        .filter((candidate) => candidate.team === player.team && !candidate.user)
+        .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
+      const targetX = teammate?.x ?? game.width * 0.58;
+      const targetY = teammate?.y ?? game.height * 0.5;
+      const dx = targetX - ball.x;
+      const dy = targetY - ball.y;
+      const d = length(dx, dy);
+      ball.vx = (dx / d) * 470;
+      ball.vy = (dy / d) * 470;
+      player.cooldown = 0.28;
+      onStatus("Pass played");
+    };
+
+    const dribble = () => {
+      const { game, player, ball } = getUserAndBall();
+      if (!player) return;
+      const dx = ball.x - player.x;
+      const dy = ball.y - player.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > player.radius + ball.radius + 38 || player.cooldown > 0) return;
+      const keys = keysRef.current;
+      let ix = (keys.has("arrowright") || keys.has("d") ? 1 : 0) - (keys.has("arrowleft") || keys.has("a") ? 1 : 0);
+      let iy = (keys.has("arrowdown") || keys.has("s") ? 1 : 0) - (keys.has("arrowup") || keys.has("w") ? 1 : 0);
+      if (!ix && !iy) ix = 1;
+      const d = length(ix, iy);
+      player.vx += (ix / d) * 260;
+      player.vy += (iy / d) * 260;
+      ball.vx = (ix / d) * 240;
+      ball.vy = (iy / d) * 240;
+      player.cooldown = 0.24;
+      onStatus("Close dribble");
+    };
+
+    const sprint = () => {
+      sprintBoostRef.current = performance.now() + 900;
+      onStatus("Sprint boost");
+    };
+
+    const move = () => {
+      const { player } = getUserAndBall();
+      if (!player) return;
+      player.vx += 120;
+      onStatus("Move with WASD or arrows");
+    };
+
+    const executeAction = (action) => {
+      if (!runningRef.current) setRunning(true);
+      if (action === "shoot") shoot();
+      if (action === "pass") pass();
+      if (action === "dribble") dribble();
+      if (action === "sprint") sprint();
+      if (action === "move") move();
+    };
+    actionHandlerRef.current = executeAction;
+
+    const shootLegacy = () => {
       const game = gameRef.current;
       const player = game.players.find((candidate) => candidate.user);
       const ball = game.ball;
@@ -392,14 +482,15 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
 
       if (ix || iy) {
         const d = length(ix, iy);
-        const sprint = keys.has("shift") ? 1.35 : 1;
+        const sprint = keys.has("shift") || performance.now() < sprintBoostRef.current ? 1.45 : 1;
         user.vx += (ix / d) * 930 * sprint * dt;
         user.vy += (iy / d) * 930 * sprint * dt;
       }
 
       for (const player of game.players) {
         if (!player.user) updateAi(game, player, dt);
-        const maxSpeed = player.user && keys.has("shift") ? 330 : player.user ? 250 : 230;
+        const boosting = player.user && (keys.has("shift") || performance.now() < sprintBoostRef.current);
+        const maxSpeed = boosting ? 350 : player.user ? 250 : 230;
         const speed = Math.hypot(player.vx, player.vy);
         if (speed > maxSpeed) {
           player.vx = (player.vx / speed) * maxSpeed;
@@ -474,6 +565,14 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
         if (!runningRef.current) setRunning(true);
         shoot();
       }
+      if (event.key.toLowerCase() === "f") {
+        if (!runningRef.current) setRunning(true);
+        pass();
+      }
+      if (event.key.toLowerCase() === "e") {
+        if (!runningRef.current) setRunning(true);
+        dribble();
+      }
     };
     const keyUp = (event) => keysRef.current.delete(event.key.toLowerCase());
     const setPointer = (event) => {
@@ -487,7 +586,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       setRunning(true);
     };
     const pointerUp = () => {
-      shoot();
+      shootLegacy();
       pointerRef.current.active = false;
     };
 
@@ -502,6 +601,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
     frame = requestAnimationFrame(render);
 
     return () => {
+      actionHandlerRef.current = null;
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", keyDown);
@@ -1401,6 +1501,44 @@ function AdminDashboard({
   );
 }
 
+function GameplayControls({ controls, running, onAction }) {
+  const items = controls?.length
+    ? controls
+    : [
+        { id: "move", label: "Move", keyboard: "WASD / Arrows", description: "Move the controlled player around the pitch." },
+        { id: "sprint", label: "Sprint", keyboard: "Shift", description: "Burst into space." },
+        { id: "dribble", label: "Dribble", keyboard: "E", description: "Keep the ball close and beat a defender." },
+        { id: "pass", label: "Pass", keyboard: "F", description: "Play the ball into a teammate or open channel." },
+        { id: "shoot", label: "Shoot", keyboard: "Space", description: "Strike toward goal." }
+      ];
+
+  return (
+    <div className="gameplay-controls">
+      <div className="panel-title">
+        <Gamepad2 size={17} aria-hidden="true" />
+        <strong>Control System</strong>
+      </div>
+      <div className="control-actions">
+        {items.map((item) => (
+          <button key={item.id} type="button" className={`control-action ${item.id}`} onClick={() => onAction(item.id)}>
+            <span>{item.label}</span>
+            <small>{item.keyboard}</small>
+          </button>
+        ))}
+      </div>
+      <div className="control-tips">
+        {items.map((item) => (
+          <div key={`tip-${item.id}`}>
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+          </div>
+        ))}
+      </div>
+      <p>{running ? "Backend command layer is accepting live actions." : "Start the match, then use buttons or keyboard controls."}</p>
+    </div>
+  );
+}
+
 export default function Home() {
   const [running, setRunning] = useState(false);
   const [score, setScore] = useState({ gold: 0, blue: 0 });
@@ -1419,6 +1557,8 @@ export default function Home() {
   const [adminMessage, setAdminMessage] = useState("");
   const [adminBusy, setAdminBusy] = useState(false);
   const [catalog, setCatalog] = useState({ stadiums: [], balls: [], jerseys: [], modes: [], rosterPlayers: [] });
+  const [gameplayControls, setGameplayControls] = useState([]);
+  const [actionCommand, setActionCommand] = useState(null);
   const [selectedSetup, setSelectedSetup] = useState({});
   const [setupCollapsed, setSetupCollapsed] = useState(false);
 
@@ -1468,16 +1608,19 @@ export default function Home() {
   useEffect(() => {
     async function loadBackendData() {
       try {
-        const [healthResponse, leaderboardResponse, catalogResponse] = await Promise.all([
+        const [healthResponse, leaderboardResponse, catalogResponse, controlsResponse] = await Promise.all([
           fetch(`${apiUrl}/health`),
           fetch(`${apiUrl}/leaderboard`),
-          fetch(`${apiUrl}/catalog`)
+          fetch(`${apiUrl}/catalog`),
+          fetch(`${apiUrl}/gameplay/controls`)
         ]);
-        if (!healthResponse.ok || !leaderboardResponse.ok || !catalogResponse.ok) throw new Error("Backend unavailable");
+        if (!healthResponse.ok || !leaderboardResponse.ok || !catalogResponse.ok || !controlsResponse.ok) throw new Error("Backend unavailable");
         await healthResponse.json();
         setLeaders(await leaderboardResponse.json());
         const nextCatalog = await catalogResponse.json();
+        const controlsPayload = await controlsResponse.json();
         setCatalog(nextCatalog);
+        setGameplayControls(controlsPayload.controls ?? []);
         setSelectedSetup({
           stadium: nextCatalog.stadiums?.[0],
           ball: nextCatalog.balls?.[0],
@@ -1718,6 +1861,23 @@ export default function Home() {
   const selectSetup = (key, value) => {
     setSelectedSetup((current) => ({ ...current, [key]: value }));
   };
+  const triggerGameplayAction = (action) => {
+    setRunning(true);
+    setActionCommand({ action, id: `${action}-${Date.now()}` });
+    setStatus(action === "shoot" ? "Shoot" : action === "pass" ? "Pass" : action === "dribble" ? "Dribble" : action === "sprint" ? "Sprint" : "Move");
+    apiRequest("/gameplay/actions", {
+      method: "POST",
+      body: JSON.stringify({
+        action,
+        minute: Math.max(0, Math.round(90 - seconds)),
+        metadata: {
+          score,
+          stadium: selectedSetup.stadium?.name,
+          mode: selectedSetup.mode?.name
+        }
+      })
+    }).catch(() => setStatus("Action queued locally"));
+  };
 
   return (
     <main className="app-shell">
@@ -1821,9 +1981,13 @@ export default function Home() {
           <div className="control-grid">
             <StatCard icon={Gamepad2} label="Move" value="WASD" />
             <StatCard icon={Zap} label="Sprint" value="Shift" />
+            <StatCard icon={Goal} label="Pass" value="F" />
             <StatCard icon={Trophy} label="Shoot" value="Space" />
+            <StatCard icon={Activity} label="Dribble" value="E" />
             <StatCard icon={Activity} label="Tempo" value={running ? "Live" : "Ready"} />
           </div>
+
+          <GameplayControls controls={gameplayControls} running={running} onAction={triggerGameplayAction} />
         </aside>
 
         <section className="pitch-wrap">
@@ -1839,6 +2003,7 @@ export default function Home() {
             onTime={setSeconds}
             onStatus={setStatus}
             resetToken={resetToken}
+            actionCommand={actionCommand}
           />
           {!running && (
             <button className="kickoff" type="button" onClick={() => setRunning(true)}>
@@ -1857,6 +2022,19 @@ export default function Home() {
             <div className="stamina">
               <i />
             </div>
+          </div>
+          <div className="pitch-control-deck">
+            {(gameplayControls.length ? gameplayControls : [
+              { id: "sprint", label: "Sprint", keyboard: "Shift" },
+              { id: "dribble", label: "Dribble", keyboard: "E" },
+              { id: "pass", label: "Pass", keyboard: "F" },
+              { id: "shoot", label: "Shoot", keyboard: "Space" }
+            ]).filter((item) => item.id !== "move").map((item) => (
+              <button key={`deck-${item.id}`} type="button" className={`deck-action ${item.id}`} onClick={() => triggerGameplayAction(item.id)}>
+                <span>{item.label}</span>
+                <small>{item.keyboard}</small>
+              </button>
+            ))}
           </div>
         </section>
 
