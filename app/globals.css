@@ -813,6 +813,14 @@ button {
   border-color: rgba(114, 255, 194, 0.34);
 }
 
+.control-action.switch,
+.deck-action.switch {
+  border-color: rgba(255, 223, 77, 0.42);
+  background:
+    linear-gradient(145deg, rgba(255, 223, 77, 0.18), rgba(114, 255, 194, 0.1)),
+    rgba(255, 255, 255, 0.05);
+}
+
 .control-action:hover,
 .deck-action:hover {
   transform: translateY(-1px);
@@ -1032,9 +1040,9 @@ button {
   bottom: 18px;
   z-index: 3;
   display: grid;
-  grid-template-columns: repeat(4, minmax(82px, 1fr));
+  grid-template-columns: repeat(5, minmax(78px, 1fr));
   gap: 8px;
-  width: min(520px, calc(100% - 345px));
+  width: min(620px, calc(100% - 345px));
   padding: 10px;
   border: 1px solid rgba(220, 255, 239, 0.16);
   border-radius: 8px;

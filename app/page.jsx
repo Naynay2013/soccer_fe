@@ -68,6 +68,8 @@ const newPlayer = (team, role, x, y, user = false) => ({
   cooldown: 0
 });
 
+const controlledTeam = "gold";
+
 function createGame(width, height) {
   return {
     width,
@@ -77,6 +79,7 @@ function createGame(width, height) {
     finished: false,
     status: "Kickoff",
     statusUntil: 0,
+    activePlayerIndex: 0,
     ball: { x: width / 2, y: height / 2, vx: 0, vy: 0, radius: 9 },
     players: [
       newPlayer("gold", "Striker", width * 0.31, height * 0.5, true),
@@ -94,10 +97,15 @@ function createGame(width, height) {
 function resetFormation(game, direction = 0) {
   const fresh = createGame(game.width, game.height);
   game.players = fresh.players;
+  game.activePlayerIndex = fresh.activePlayerIndex;
   game.ball.x = game.width / 2;
   game.ball.y = game.height / 2;
   game.ball.vx = direction * 230;
   game.ball.vy = 0;
+}
+
+function activePlayer(game) {
+  return game.players[game.activePlayerIndex] ?? game.players.find((player) => player.team === controlledTeam) ?? game.players[0];
 }
 
 function drawPitch(ctx, game) {
@@ -353,22 +361,42 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       gameStateRef.current = {
         width: game.width,
         height: game.height,
+        activePlayerIndex: game.activePlayerIndex,
         ball: { ...game.ball },
-        players: game.players.map((player) => ({
+        players: game.players.map((player, index) => ({
           team: player.team,
           role: player.role,
           x: player.x,
           y: player.y,
           vx: player.vx,
           vy: player.vy,
-          user: player.user
+          user: index === game.activePlayerIndex,
+          active: index === game.activePlayerIndex
         }))
       };
     };
 
     const getUserAndBall = () => {
       const game = gameRef.current;
-      return { game, player: game.players.find((candidate) => candidate.user), ball: game.ball };
+      return { game, player: activePlayer(game), ball: game.ball };
+    };
+
+    const switchPlayer = () => {
+      const game = gameRef.current;
+      if (!game) return;
+      const current = activePlayer(game);
+      const candidates = game.players
+        .map((player, index) => ({ player, index }))
+        .filter(({ player }) => player.team === controlledTeam);
+      const next = candidates
+        .filter(({ index }) => index !== game.activePlayerIndex)
+        .sort((a, b) => Math.hypot(a.player.x - game.ball.x, a.player.y - game.ball.y) - Math.hypot(b.player.x - game.ball.x, b.player.y - game.ball.y))[0];
+      if (next) {
+        current.user = false;
+        next.player.user = true;
+        game.activePlayerIndex = next.index;
+        onStatus(`Controlling ${next.player.role}`);
+      }
     };
 
     const shoot = () => {
@@ -446,6 +474,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       if (action === "dribble") dribble();
       if (action === "sprint") sprint();
       if (action === "move") move();
+      if (action === "switch") switchPlayer();
     };
     actionHandlerRef.current = executeAction;
 
@@ -479,7 +508,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
         onStatus(game.score.gold === game.score.blue ? "Full time draw" : game.score.gold > game.score.blue ? "Yellow FC wins" : "Blue United wins");
       }
 
-      const user = game.players.find((player) => player.user);
+      const user = activePlayer(game);
       const keys = keysRef.current;
       let ix = 0;
       let iy = 0;
@@ -507,9 +536,10 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       }
 
       for (const player of game.players) {
-        if (!player.user) updateAi(game, player, dt);
-        const boosting = player.user && (keys.has("shift") || performance.now() < sprintBoostRef.current);
-        const maxSpeed = boosting ? 350 : player.user ? 250 : 230;
+        const isActive = player === user;
+        if (!isActive) updateAi(game, player, dt);
+        const boosting = isActive && (keys.has("shift") || performance.now() < sprintBoostRef.current);
+        const maxSpeed = boosting ? 350 : isActive ? 250 : 230;
         const speed = Math.hypot(player.vx, player.vy);
         if (speed > maxSpeed) {
           player.vx = (player.vx / speed) * maxSpeed;
@@ -592,6 +622,11 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       if (event.key.toLowerCase() === "e") {
         if (!runningRef.current) setRunning(true);
         dribble();
+      }
+      if (event.key.toLowerCase() === "q" || event.key.toLowerCase() === "tab") {
+        event.preventDefault();
+        if (!runningRef.current) setRunning(true);
+        switchPlayer();
       }
     };
     const keyUp = (event) => keysRef.current.delete(event.key.toLowerCase());
@@ -851,6 +886,33 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   return group;
 }
 
+function makeControlStar() {
+  const group = new THREE.Group();
+  const material = new THREE.MeshBasicMaterial({ color: "#ffdf4d", transparent: true, opacity: 0.95 });
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 10; i += 1) {
+    const radius = i % 2 === 0 ? 1.15 : 0.5;
+    const angle = -Math.PI / 2 + (i / 10) * Math.PI * 2;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  shape.closePath();
+  const star = new THREE.Mesh(new THREE.ShapeGeometry(shape), material);
+  star.rotation.x = -0.24;
+  group.add(star);
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1.42, 0.08, 8, 32),
+    new THREE.MeshBasicMaterial({ color: "#72ffc2", transparent: true, opacity: 0.7 })
+  );
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = -0.08;
+  group.add(ring);
+  group.visible = false;
+  return group;
+}
+
 function StadiumScene({ setup, running, gameStateRef }) {
   const mountRef = useRef(null);
 
@@ -873,6 +935,7 @@ function StadiumScene({ setup, running, gameStateRef }) {
     const cameraTarget = new THREE.Vector3(0, 4, 0);
     const cameraDesired = new THREE.Vector3(0, 42, 58);
     const cameraLook = new THREE.Vector3(0, 4, 0);
+    const controlStar = makeControlStar();
     let frame = 0;
     const toField = (x, y, width = 1, height = 1) => ({
       x: THREE.MathUtils.clamp((x / Math.max(width, 1) - 0.5) * 82, -40, 40),
@@ -886,6 +949,7 @@ function StadiumScene({ setup, running, gameStateRef }) {
 
     camera.position.copy(cameraDesired);
     camera.lookAt(cameraLook);
+    scene.add(controlStar);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.58));
     const keyLight = new THREE.DirectionalLight(accent, 1.6);
@@ -1167,6 +1231,17 @@ function StadiumScene({ setup, running, gameStateRef }) {
           });
         }
       });
+      const activeMesh = Number.isInteger(gameSnapshot?.activePlayerIndex)
+        ? animatedObjects.find((object) => object.userData.gameIndex === gameSnapshot.activePlayerIndex)
+        : null;
+      if (activeMesh) {
+        controlStar.visible = true;
+        controlStar.position.set(activeMesh.position.x, activeMesh.position.y + 13.6, activeMesh.position.z);
+        controlStar.rotation.y += 0.035;
+        controlStar.scale.setScalar(1 + Math.sin(time * 4) * 0.08);
+      } else {
+        controlStar.visible = false;
+      }
       const leadX = THREE.MathUtils.clamp(ball.position.x * 0.45, -18, 18);
       const leadZ = THREE.MathUtils.clamp(ball.position.z * 0.5, -30, 30);
       cameraTarget.set(leadX, 5.2, leadZ);
@@ -1557,7 +1632,8 @@ function GameplayControls({ controls, running, onAction }) {
         { id: "sprint", label: "Sprint", keyboard: "Shift", description: "Burst into space." },
         { id: "dribble", label: "Dribble", keyboard: "E", description: "Keep the ball close and beat a defender." },
         { id: "pass", label: "Pass", keyboard: "F", description: "Play the ball into a teammate or open channel." },
-        { id: "shoot", label: "Shoot", keyboard: "Space", description: "Strike toward goal." }
+        { id: "shoot", label: "Shoot", keyboard: "Space", description: "Strike toward goal." },
+        { id: "switch", label: "Switch Player", keyboard: "Q / Tab", description: "Change control to the best-positioned teammate." }
       ];
 
   return (
@@ -1913,7 +1989,7 @@ export default function Home() {
   const triggerGameplayAction = (action) => {
     setRunning(true);
     setActionCommand({ action, id: `${action}-${Date.now()}` });
-    setStatus(action === "shoot" ? "Shoot" : action === "pass" ? "Pass" : action === "dribble" ? "Dribble" : action === "sprint" ? "Sprint" : "Move");
+    setStatus(action === "shoot" ? "Shoot" : action === "pass" ? "Pass" : action === "dribble" ? "Dribble" : action === "sprint" ? "Sprint" : action === "switch" ? "Switch player" : "Move");
     apiRequest("/gameplay/actions", {
       method: "POST",
       body: JSON.stringify({
@@ -2033,6 +2109,7 @@ export default function Home() {
             <StatCard icon={Goal} label="Pass" value="F" />
             <StatCard icon={Trophy} label="Shoot" value="Space" />
             <StatCard icon={Activity} label="Dribble" value="E" />
+            <StatCard icon={Star} label="Switch" value="Q / Tab" />
             <StatCard icon={Activity} label="Tempo" value={running ? "Live" : "Ready"} />
           </div>
 
@@ -2078,7 +2155,8 @@ export default function Home() {
               { id: "sprint", label: "Sprint", keyboard: "Shift" },
               { id: "dribble", label: "Dribble", keyboard: "E" },
               { id: "pass", label: "Pass", keyboard: "F" },
-              { id: "shoot", label: "Shoot", keyboard: "Space" }
+              { id: "shoot", label: "Shoot", keyboard: "Space" },
+              { id: "switch", label: "Switch", keyboard: "Q / Tab" }
             ]).filter((item) => item.id !== "move").map((item) => (
               <button key={`deck-${item.id}`} type="button" className={`deck-action ${item.id}`} onClick={() => triggerGameplayAction(item.id)}>
                 <span>{item.label}</span>
