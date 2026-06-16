@@ -489,6 +489,41 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       onStatus("Move with WASD or arrows");
     };
 
+    const keeperDive = (side = 1) => {
+      const { player, ball } = getUserAndBall();
+      if (!player || player.role !== "Keeper" || player.cooldown > 0) return;
+      player.vx += side * 360;
+      player.vy += player.team === "gold" ? -120 : 120;
+      player.cooldown = 0.55;
+      if (Math.hypot(ball.x - player.x, ball.y - player.y) < player.radius + ball.radius + 58) {
+        ball.vx += side * 260;
+        ball.vy += player.team === "gold" ? -180 : 180;
+      }
+      onStatus(side < 0 ? "Keeper dive left" : "Keeper dive right");
+    };
+
+    const keeperRush = () => {
+      const { player, ball } = getUserAndBall();
+      if (!player || player.role !== "Keeper") return;
+      const dx = ball.x - player.x;
+      const dy = ball.y - player.y;
+      const d = length(dx, dy);
+      player.vx += (dx / d) * 300;
+      player.vy += (dy / d) * 300;
+      onStatus("Keeper rush");
+    };
+
+    const keeperClear = () => {
+      const { game, player, ball } = getUserAndBall();
+      if (!player || player.role !== "Keeper" || player.cooldown > 0) return;
+      if (Math.hypot(ball.x - player.x, ball.y - player.y) > player.radius + ball.radius + 42) return;
+      const direction = player.team === "gold" ? -1 : 1;
+      ball.vx = (game.width * 0.5 - ball.x) * 2.4;
+      ball.vy = direction * 640;
+      player.cooldown = 0.5;
+      onStatus("Keeper clearance");
+    };
+
     const executeAction = (action) => {
       if (!runningRef.current) setRunning(true);
       if (action === "shoot") shoot();
@@ -497,6 +532,10 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       if (action === "sprint") sprint();
       if (action === "move") move();
       if (action === "switch") switchPlayer();
+      if (action === "keeperDiveLeft") keeperDive(-1);
+      if (action === "keeperDiveRight") keeperDive(1);
+      if (action === "keeperRush") keeperRush();
+      if (action === "keeperClear") keeperClear();
     };
     actionHandlerRef.current = executeAction;
 
@@ -651,6 +690,10 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
         if (!runningRef.current) setRunning(true);
         switchPlayer();
       }
+      if (event.key.toLowerCase() === "z") keeperDive(-1);
+      if (event.key.toLowerCase() === "c") keeperDive(1);
+      if (event.key.toLowerCase() === "r") keeperRush();
+      if (event.key.toLowerCase() === "x") keeperClear();
     };
     const keyUp = (event) => keysRef.current.delete(event.key.toLowerCase());
     const setPointer = (event) => {
@@ -867,7 +910,7 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   smile.rotation.set(0, 0, Math.PI);
   group.add(smile);
 
-  const rig = { arms: [], legs: [] };
+  const rig = { arms: [], legs: [], torso, head };
   [-1, 1].forEach((side) => {
     const armGroup = new THREE.Group();
     armGroup.position.set(side * 0.76 * buildScale, 5.48, 0.02);
@@ -897,7 +940,7 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     boot.position.set(0, -2.33, 0.16);
     boot.rotation.x = -0.08;
     legGroup.add(boot);
-    rig.legs.push({ group: legGroup, side });
+    rig.legs.push({ group: legGroup, side, boot, thigh, sock });
     group.add(legGroup);
   });
 
@@ -1226,9 +1269,10 @@ function StadiumScene({ setup, running, gameStateRef }) {
           const simPlayer = Number.isInteger(object.userData.gameIndex) ? gameSnapshot?.players?.[object.userData.gameIndex] : null;
           let motion = running ? 0.42 : 0.18;
           let stride = Math.sin(time * (running ? 2.1 : 1.15) + phase);
+          let velocity = 0;
           if (simPlayer) {
             const next = toField(simPlayer.x, simPlayer.y, gameSnapshot.width, gameSnapshot.height);
-            const velocity = Math.hypot(simPlayer.vx, simPlayer.vy);
+            velocity = Math.hypot(simPlayer.vx, simPlayer.vy);
             motion = THREE.MathUtils.clamp(velocity / 220, 0.08, 0.95);
             stride = Math.sin(time * (1.65 + motion * 2.65) + phase);
             object.position.x = THREE.MathUtils.lerp(object.position.x, next.x, 0.18);
@@ -1244,13 +1288,23 @@ function StadiumScene({ setup, running, gameStateRef }) {
             ? Math.atan2(simPlayer.vx, simPlayer.vy)
             : Math.atan2(ball.position.x - object.position.x, ball.position.z - object.position.z);
           object.rotation.y = THREE.MathUtils.lerp(object.rotation.y, faceAngle, 0.04);
+          const lift = Math.max(0, Math.sin(time * (1.65 + motion * 2.65) + phase));
+          const keeperDive = simPlayer?.role === "Keeper" && velocity > 180 ? THREE.MathUtils.clamp(simPlayer.vx / 320, -0.55, 0.55) : 0;
+          object.userData.rig.torso.rotation.x = THREE.MathUtils.lerp(object.userData.rig.torso.rotation.x, motion * 0.08, 0.1);
+          object.userData.rig.torso.rotation.z = THREE.MathUtils.lerp(object.userData.rig.torso.rotation.z, keeperDive || Math.sin(time * 1.7 + phase) * motion * 0.035, 0.08);
+          object.userData.rig.head.rotation.x = THREE.MathUtils.lerp(object.userData.rig.head.rotation.x, -motion * 0.045, 0.08);
+          object.userData.rig.head.rotation.z = THREE.MathUtils.lerp(object.userData.rig.head.rotation.z, -keeperDive * 0.45, 0.08);
           object.userData.rig.arms.forEach(({ group, side }) => {
-            group.rotation.x = stride * side * motion * 0.48;
-            group.rotation.z = side * 0.22;
+            group.rotation.x = stride * side * motion * 0.38 + keeperDive * 0.6;
+            group.rotation.z = side * (0.2 + motion * 0.04) + keeperDive * 0.55;
           });
-          object.userData.rig.legs.forEach(({ group, side }) => {
-            group.rotation.x = -stride * side * motion * 0.55;
-            group.rotation.z = side * 0.05;
+          object.userData.rig.legs.forEach(({ group, side, boot, sock }) => {
+            const legPhase = stride * side;
+            group.rotation.x = -legPhase * motion * 0.46;
+            group.rotation.z = side * (0.045 + motion * 0.015) - keeperDive * 0.25;
+            boot.rotation.x = -0.08 + Math.max(0, -legPhase) * motion * 0.38;
+            boot.position.y = -2.33 + lift * motion * 0.16;
+            sock.rotation.x = Math.max(0, legPhase) * motion * 0.18;
           });
         }
       });
@@ -1656,7 +1710,11 @@ function GameplayControls({ controls, running, onAction }) {
         { id: "dribble", label: "Dribble", keyboard: "E", description: "Keep the ball close and beat a defender." },
         { id: "pass", label: "Pass", keyboard: "F", description: "Play the ball into a teammate or open channel." },
         { id: "shoot", label: "Shoot", keyboard: "Space", description: "Strike toward goal." },
-        { id: "switch", label: "Switch Player", keyboard: "Q / Tab", description: "Change control to the best-positioned teammate." }
+        { id: "switch", label: "Switch Player", keyboard: "Q / Tab", description: "Change control to the best-positioned teammate." },
+        { id: "keeperDiveLeft", label: "Keeper Dive L", keyboard: "Z", description: "Dive left when controlling the goalkeeper." },
+        { id: "keeperDiveRight", label: "Keeper Dive R", keyboard: "C", description: "Dive right when controlling the goalkeeper." },
+        { id: "keeperRush", label: "Keeper Rush", keyboard: "R", description: "Charge toward the ball as the goalkeeper." },
+        { id: "keeperClear", label: "Keeper Clear", keyboard: "X", description: "Clear the ball upfield as the goalkeeper." }
       ];
 
   return (
@@ -2179,7 +2237,11 @@ export default function Home() {
               { id: "dribble", label: "Dribble", keyboard: "E" },
               { id: "pass", label: "Pass", keyboard: "F" },
               { id: "shoot", label: "Shoot", keyboard: "Space" },
-              { id: "switch", label: "Switch", keyboard: "Q / Tab" }
+              { id: "switch", label: "Switch", keyboard: "Q / Tab" },
+              { id: "keeperDiveLeft", label: "Dive L", keyboard: "Z" },
+              { id: "keeperDiveRight", label: "Dive R", keyboard: "C" },
+              { id: "keeperRush", label: "Rush", keyboard: "R" },
+              { id: "keeperClear", label: "Clear", keyboard: "X" }
             ]).filter((item) => item.id !== "move").map((item) => (
               <button key={`deck-${item.id}`} type="button" className={`deck-action ${item.id}`} onClick={() => triggerGameplayAction(item.id)}>
                 <span>{item.label}</span>

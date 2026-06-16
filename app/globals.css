@@ -821,6 +821,20 @@ button {
     rgba(255, 255, 255, 0.05);
 }
 
+.control-action.keeperDiveLeft,
+.control-action.keeperDiveRight,
+.control-action.keeperRush,
+.control-action.keeperClear,
+.deck-action.keeperDiveLeft,
+.deck-action.keeperDiveRight,
+.deck-action.keeperRush,
+.deck-action.keeperClear {
+  border-color: rgba(118, 108, 255, 0.38);
+  background:
+    linear-gradient(145deg, rgba(118, 108, 255, 0.2), rgba(88, 168, 255, 0.1)),
+    rgba(255, 255, 255, 0.05);
+}
+
 .control-action:hover,
 .deck-action:hover {
   transform: translateY(-1px);
@@ -1040,7 +1054,7 @@ button {
   bottom: 18px;
   z-index: 3;
   display: grid;
-  grid-template-columns: repeat(5, minmax(78px, 1fr));
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
   gap: 8px;
   width: min(620px, calc(100% - 345px));
   padding: 10px;
