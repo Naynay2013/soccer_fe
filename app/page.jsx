@@ -1744,6 +1744,34 @@ function GameplayControls({ controls, running, onAction }) {
   );
 }
 
+function SidebarSection({ title, icon: Icon, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={`sidebar-section ${open ? "open" : "closed"}`}>
+      <button className="sidebar-section-toggle" type="button" onClick={() => setOpen((value) => !value)}>
+        <span>
+          {Icon && <Icon size={16} aria-hidden="true" />}
+          <strong>{title}</strong>
+        </span>
+        <b>{open ? "Close" : "Open"}</b>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            className="sidebar-section-body"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
 export default function Home() {
   const [running, setRunning] = useState(false);
   const [score, setScore] = useState({ gold: 0, blue: 0 });
@@ -2139,62 +2167,75 @@ export default function Home() {
             </div>
           </div>
 
-          <AccountHub
-            user={user}
-            apiState={apiState}
-            authMode={authMode}
-            setAuthMode={setAuthMode}
-            authMessage={authMessage}
-            authBusy={authBusy}
-            resetTokenPreview={resetTokenPreview}
-            onLogin={handleLogin}
-            onRegister={handleRegister}
-            onLogout={handleLogout}
-            onProfile={handleProfile}
-            onPassword={handlePassword}
-            onRequestReset={handleRequestReset}
-            onResetPassword={handleResetPassword}
-          />
+          <SidebarSection title="Account" icon={Lock} defaultOpen={!user}>
+            <AccountHub
+              user={user}
+              apiState={apiState}
+              authMode={authMode}
+              setAuthMode={setAuthMode}
+              authMessage={authMessage}
+              authBusy={authBusy}
+              resetTokenPreview={resetTokenPreview}
+              onLogin={handleLogin}
+              onRegister={handleRegister}
+              onLogout={handleLogout}
+              onProfile={handleProfile}
+              onPassword={handlePassword}
+              onRequestReset={handleRequestReset}
+              onResetPassword={handleResetPassword}
+            />
+          </SidebarSection>
 
-          <AdminDashboard
-            user={user}
-            adminData={adminData}
-            adminTab={adminTab}
-            setAdminTab={setAdminTab}
-            adminMessage={adminMessage}
-            adminBusy={adminBusy}
-            onRefresh={loadAdminData}
-            onUpdateUser={handleAdminUpdateUser}
-            onDeleteUser={handleAdminDeleteUser}
-            onUpdatePlayer={handleAdminUpdatePlayer}
-            onDeleteMatch={handleAdminDeleteMatch}
-          />
+          {user?.role === "ADMIN" && (
+            <SidebarSection title="Admin" icon={Database}>
+              <AdminDashboard
+                user={user}
+                adminData={adminData}
+                adminTab={adminTab}
+                setAdminTab={setAdminTab}
+                adminMessage={adminMessage}
+                adminBusy={adminBusy}
+                onRefresh={loadAdminData}
+                onUpdateUser={handleAdminUpdateUser}
+                onDeleteUser={handleAdminDeleteUser}
+                onUpdatePlayer={handleAdminUpdatePlayer}
+                onDeleteMatch={handleAdminDeleteMatch}
+              />
+            </SidebarSection>
+          )}
 
-          <div className="player-card">
-            <div className="player-portrait">
-              <span>9</span>
+          <SidebarSection title="Player" icon={Star} defaultOpen>
+            <div className="player-card">
+              <div className="player-portrait">
+                <span>9</span>
+              </div>
+              <div>
+                <span>Controlled Player</span>
+                <strong>{user?.player?.displayName ?? "J. Striker"}</strong>
+                <p>{user?.player ? `${user.player.handle} | Rating ${user.player.rating}` : "Explosive forward"}</p>
+              </div>
             </div>
-            <div>
-              <span>Controlled Player</span>
-              <strong>{user?.player?.displayName ?? "J. Striker"}</strong>
-              <p>{user?.player ? `${user.player.handle} | Rating ${user.player.rating}` : "Explosive forward"}</p>
+          </SidebarSection>
+
+          <SidebarSection title="Match Stats" icon={Gauge}>
+            <Meter label="Possession" value={possession} tone="gold" />
+            <Meter label="Attack Pressure" value={pressure} />
+            <div className="control-grid">
+              <StatCard icon={Activity} label="Tempo" value={running ? "Live" : "Ready"} />
             </div>
-          </div>
+          </SidebarSection>
 
-          <Meter label="Possession" value={possession} tone="gold" />
-          <Meter label="Attack Pressure" value={pressure} />
-
-          <div className="control-grid">
-            <StatCard icon={Gamepad2} label="Move" value="WASD" />
-            <StatCard icon={Zap} label="Sprint" value="Shift" />
-            <StatCard icon={Goal} label="Pass" value="F" />
-            <StatCard icon={Trophy} label="Shoot" value="Space" />
-            <StatCard icon={Activity} label="Dribble" value="E" />
-            <StatCard icon={Star} label="Switch" value="Q / Tab" />
-            <StatCard icon={Activity} label="Tempo" value={running ? "Live" : "Ready"} />
-          </div>
-
-          <GameplayControls controls={gameplayControls} running={running} onAction={triggerGameplayAction} />
+          <SidebarSection title="Controls & Tips" icon={Gamepad2} defaultOpen>
+            <div className="control-grid">
+              <StatCard icon={Gamepad2} label="Move" value="WASD" />
+              <StatCard icon={Zap} label="Sprint" value="Shift" />
+              <StatCard icon={Goal} label="Pass" value="F" />
+              <StatCard icon={Trophy} label="Shoot" value="Space" />
+              <StatCard icon={Activity} label="Dribble" value="E" />
+              <StatCard icon={Star} label="Switch" value="Q / Tab" />
+            </div>
+            <GameplayControls controls={gameplayControls} running={running} onAction={triggerGameplayAction} />
+          </SidebarSection>
         </aside>
 
         <section className="pitch-wrap">
@@ -2230,24 +2271,6 @@ export default function Home() {
             <div className="stamina">
               <i />
             </div>
-          </div>
-          <div className="pitch-control-deck">
-            {(gameplayControls.length ? gameplayControls : [
-              { id: "sprint", label: "Sprint", keyboard: "Shift" },
-              { id: "dribble", label: "Dribble", keyboard: "E" },
-              { id: "pass", label: "Pass", keyboard: "F" },
-              { id: "shoot", label: "Shoot", keyboard: "Space" },
-              { id: "switch", label: "Switch", keyboard: "Q / Tab" },
-              { id: "keeperDiveLeft", label: "Dive L", keyboard: "Z" },
-              { id: "keeperDiveRight", label: "Dive R", keyboard: "C" },
-              { id: "keeperRush", label: "Rush", keyboard: "R" },
-              { id: "keeperClear", label: "Clear", keyboard: "X" }
-            ]).filter((item) => item.id !== "move").map((item) => (
-              <button key={`deck-${item.id}`} type="button" className={`deck-action ${item.id}`} onClick={() => triggerGameplayAction(item.id)}>
-                <span>{item.label}</span>
-                <small>{item.keyboard}</small>
-              </button>
-            ))}
           </div>
         </section>
 

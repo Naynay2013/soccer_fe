@@ -271,6 +271,67 @@ button {
   border-radius: 8px;
 }
 
+.sidebar-section {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.sidebar-section-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 0;
+  background:
+    linear-gradient(135deg, rgba(114, 255, 194, 0.1), rgba(88, 168, 255, 0.06)),
+    rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.sidebar-section-toggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sidebar-section-toggle strong {
+  overflow: hidden;
+  font-size: 0.86rem;
+  font-weight: 1000;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-section-toggle b {
+  color: var(--mint);
+  font-size: 0.72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.sidebar-section-body {
+  display: grid;
+  gap: 10px;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.sidebar-section-body > .account-hub,
+.sidebar-section-body > .admin-dashboard,
+.sidebar-section-body > .player-card,
+.sidebar-section-body > .gameplay-controls {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
 .mode-card,
 .account-hub,
 .admin-dashboard,
@@ -1048,22 +1109,6 @@ button {
   backdrop-filter: blur(14px);
 }
 
-.pitch-control-deck {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(82px, 1fr));
-  gap: 8px;
-  width: min(620px, calc(100% - 345px));
-  padding: 10px;
-  border: 1px solid rgba(220, 255, 239, 0.16);
-  border-radius: 8px;
-  background: rgba(4, 10, 9, 0.72);
-  backdrop-filter: blur(14px);
-}
-
 .deck-action {
   display: grid;
   place-items: center;
@@ -1384,7 +1429,8 @@ button {
 
   .player-card,
   .radar-card,
-  .tactics {
+  .tactics,
+  .sidebar-section {
     grid-column: span 2;
   }
 
@@ -1397,13 +1443,6 @@ button {
     min-height: 390px;
   }
 
-  .pitch-control-deck {
-    left: 18px;
-    right: 18px;
-    bottom: 92px;
-    width: auto;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 560px) {
@@ -1414,7 +1453,8 @@ button {
 
   .player-card,
   .radar-card,
-  .tactics {
+  .tactics,
+  .sidebar-section {
     grid-column: auto;
   }
 
@@ -1429,13 +1469,6 @@ button {
     left: 12px;
     grid-template-columns: 1fr;
     min-width: 0;
-  }
-
-  .pitch-control-deck {
-    left: 12px;
-    right: 12px;
-    bottom: 128px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .pitch-chrome {
