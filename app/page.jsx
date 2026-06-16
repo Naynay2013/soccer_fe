@@ -288,7 +288,7 @@ function updateAi(game, player, dt) {
   }
 }
 
-function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetToken, actionCommand }) {
+function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetToken, actionCommand, gameStateRef }) {
   const canvasRef = useRef(null);
   const gameRef = useRef(null);
   const keysRef = useRef(new Set());
@@ -345,6 +345,25 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
           player.homeY *= sy;
         });
       }
+    };
+
+    const publishGameState = () => {
+      const game = gameRef.current;
+      if (!gameStateRef || !game) return;
+      gameStateRef.current = {
+        width: game.width,
+        height: game.height,
+        ball: { ...game.ball },
+        players: game.players.map((player) => ({
+          team: player.team,
+          role: player.role,
+          x: player.x,
+          y: player.y,
+          vx: player.vx,
+          vy: player.vy,
+          user: player.user
+        }))
+      };
     };
 
     const getUserAndBall = () => {
@@ -551,6 +570,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       const dt = Math.min(0.033, (now - last) / 1000 || 0);
       last = now;
       update(dt);
+      publishGameState();
       ctx.clearRect(0, 0, game.width, game.height);
       frame = requestAnimationFrame(render);
     };
@@ -611,7 +631,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       canvas.removeEventListener("pointerup", pointerUp);
       canvas.removeEventListener("pointercancel", pointerUp);
     };
-  }, [onScore, onStatus, onTime, setRunning]);
+  }, [gameStateRef, onScore, onStatus, onTime, setRunning]);
 
   return <canvas ref={canvasRef} className="match-canvas" aria-label="Playable soccer match" />;
 }
@@ -831,7 +851,7 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   return group;
 }
 
-function StadiumScene({ setup, running }) {
+function StadiumScene({ setup, running, gameStateRef }) {
   const mountRef = useRef(null);
 
   useEffect(() => {
@@ -854,6 +874,10 @@ function StadiumScene({ setup, running }) {
     const cameraDesired = new THREE.Vector3(0, 42, 58);
     const cameraLook = new THREE.Vector3(0, 4, 0);
     let frame = 0;
+    const toField = (x, y, width = 1, height = 1) => ({
+      x: THREE.MathUtils.clamp((x / Math.max(width, 1) - 0.5) * 82, -40, 40),
+      z: THREE.MathUtils.clamp((y / Math.max(height, 1) - 0.5) * 118, -58, 58)
+    });
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
@@ -1052,6 +1076,9 @@ function StadiumScene({ setup, running }) {
       animatedObjects.push(human);
       human.userData.baseY = human.position.y;
       human.userData.phase = index * 0.8;
+      human.userData.gameIndex = index;
+      human.userData.lastFieldX = x;
+      human.userData.lastFieldZ = z;
       scene.add(human);
     });
 
@@ -1092,9 +1119,16 @@ function StadiumScene({ setup, running }) {
 
     const animate = () => {
       const time = performance.now() / 1000;
+      const gameSnapshot = gameStateRef?.current;
       scene.rotation.y = Math.sin(time / 4.2) * 0.025;
-      ball.position.x = Math.sin(time * 0.8) * 7;
-      ball.position.z = Math.cos(time * 0.72) * 5;
+      if (gameSnapshot?.ball) {
+        const nextBall = toField(gameSnapshot.ball.x, gameSnapshot.ball.y, gameSnapshot.width, gameSnapshot.height);
+        ball.position.x = THREE.MathUtils.lerp(ball.position.x, nextBall.x, 0.28);
+        ball.position.z = THREE.MathUtils.lerp(ball.position.z, nextBall.z, 0.28);
+      } else {
+        ball.position.x = Math.sin(time * 0.8) * 7;
+        ball.position.z = Math.cos(time * 0.72) * 5;
+      }
       ball.rotation.x += 0.035;
       ballStripe.position.copy(ball.position);
       ballStripe.rotation.z += 0.05;
@@ -1102,12 +1136,26 @@ function StadiumScene({ setup, running }) {
         const phase = object.userData.phase ?? index;
         object.position.y = object.userData.baseY + Math.sin(time * 2.4 + phase) * (running ? 0.22 : 0.05);
         if (object.userData.rig) {
-          const motion = running ? 1 : 0.55;
-          const stride = Math.sin(time * (running ? 5.2 : 3.2) + phase);
-          object.position.x = object.userData.homeX + Math.sin(time * 0.42 + phase) * motion * 1.8;
-          object.position.z = object.userData.homeZ + Math.cos(time * 0.36 + phase) * motion * 1.25;
-          object.rotation.z = Math.sin(time * 2 + phase) * motion * 0.02;
-          const faceAngle = Math.atan2(ball.position.x - object.position.x, ball.position.z - object.position.z);
+          const simPlayer = Number.isInteger(object.userData.gameIndex) ? gameSnapshot?.players?.[object.userData.gameIndex] : null;
+          let motion = running ? 0.55 : 0.25;
+          let stride = Math.sin(time * (running ? 3.4 : 1.8) + phase);
+          if (simPlayer) {
+            const next = toField(simPlayer.x, simPlayer.y, gameSnapshot.width, gameSnapshot.height);
+            const velocity = Math.hypot(simPlayer.vx, simPlayer.vy);
+            motion = THREE.MathUtils.clamp(velocity / 180, 0.12, 1.35);
+            stride = Math.sin(time * (3.2 + motion * 4.8) + phase);
+            object.position.x = THREE.MathUtils.lerp(object.position.x, next.x, 0.24);
+            object.position.z = THREE.MathUtils.lerp(object.position.z, next.z, 0.24);
+            object.userData.lastFieldX = next.x;
+            object.userData.lastFieldZ = next.z;
+          } else {
+            object.position.x = object.userData.homeX + Math.sin(time * 0.42 + phase) * motion * 1.2;
+            object.position.z = object.userData.homeZ + Math.cos(time * 0.36 + phase) * motion * 0.8;
+          }
+          object.rotation.z = Math.sin(time * 2 + phase) * motion * 0.018;
+          const faceAngle = simPlayer && Math.hypot(simPlayer.vx, simPlayer.vy) > 10
+            ? Math.atan2(simPlayer.vx, simPlayer.vy)
+            : Math.atan2(ball.position.x - object.position.x, ball.position.z - object.position.z);
           object.rotation.y = THREE.MathUtils.lerp(object.rotation.y, faceAngle, 0.04);
           object.userData.rig.arms.forEach(({ group, side }) => {
             group.rotation.x = stride * side * motion * 0.72;
@@ -1561,6 +1609,7 @@ export default function Home() {
   const [actionCommand, setActionCommand] = useState(null);
   const [selectedSetup, setSelectedSetup] = useState({});
   const [setupCollapsed, setSetupCollapsed] = useState(false);
+  const gameStateRef = useRef(null);
 
   const saveSession = useCallback((session) => {
     localStorage.setItem(tokenStore.access, session.accessToken);
@@ -1991,7 +2040,7 @@ export default function Home() {
         </aside>
 
         <section className="pitch-wrap">
-          <StadiumScene setup={selectedSetup} running={running} />
+          <StadiumScene setup={selectedSetup} running={running} gameStateRef={gameStateRef} />
           <div className="pitch-chrome top">
             <span>{selectedSetup.stadium?.name ?? "Street Cup Arena"}</span>
             <strong>{selectedSetup.mode?.name ?? status}</strong>
@@ -2004,6 +2053,7 @@ export default function Home() {
             onStatus={setStatus}
             resetToken={resetToken}
             actionCommand={actionCommand}
+            gameStateRef={gameStateRef}
           />
           {!running && (
             <button className="kickoff" type="button" onClick={() => setRunning(true)}>
