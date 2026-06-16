@@ -750,6 +750,9 @@ function StadiumScene({ setup, running }) {
     const goldJersey = setup?.homeJersey;
     const blueJersey = setup?.awayJersey;
     const animatedObjects = [];
+    const cameraTarget = new THREE.Vector3(0, 4, 0);
+    const cameraDesired = new THREE.Vector3(0, 42, 58);
+    const cameraLook = new THREE.Vector3(0, 4, 0);
     let frame = 0;
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -757,8 +760,8 @@ function StadiumScene({ setup, running }) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
-    camera.position.set(0, 70, 112);
-    camera.lookAt(0, 1.5, 0);
+    camera.position.copy(cameraDesired);
+    camera.lookAt(cameraLook);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.58));
     const keyLight = new THREE.DirectionalLight(accent, 1.6);
@@ -1004,6 +1007,8 @@ function StadiumScene({ setup, running }) {
           object.position.x = object.userData.homeX + Math.sin(time * 0.42 + phase) * motion * 1.8;
           object.position.z = object.userData.homeZ + Math.cos(time * 0.36 + phase) * motion * 1.25;
           object.rotation.z = Math.sin(time * 2 + phase) * motion * 0.02;
+          const faceAngle = Math.atan2(ball.position.x - object.position.x, ball.position.z - object.position.z);
+          object.rotation.y = THREE.MathUtils.lerp(object.rotation.y, faceAngle, 0.04);
           object.userData.rig.arms.forEach(({ group, side }) => {
             group.rotation.x = stride * side * motion * 0.72;
             group.rotation.z = side * 0.26;
@@ -1014,6 +1019,15 @@ function StadiumScene({ setup, running }) {
           });
         }
       });
+      const leadX = THREE.MathUtils.clamp(ball.position.x * 0.45, -18, 18);
+      const leadZ = THREE.MathUtils.clamp(ball.position.z * 0.5, -30, 30);
+      cameraTarget.set(leadX, 5.2, leadZ);
+      cameraDesired.set(leadX, 32 + Math.abs(leadZ) * 0.1, leadZ + 54);
+      cameraDesired.x = THREE.MathUtils.clamp(cameraDesired.x, -22, 22);
+      cameraDesired.z = THREE.MathUtils.clamp(cameraDesired.z, 24, 78);
+      camera.position.lerp(cameraDesired, 0.045);
+      cameraLook.lerp(cameraTarget, 0.075);
+      camera.lookAt(cameraLook);
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
     };
