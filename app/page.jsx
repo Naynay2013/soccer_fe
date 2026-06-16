@@ -460,9 +460,7 @@ function SoccerCanvas({ running, setRunning, onScore, onTime, onStatus, resetTok
       const dt = Math.min(0.033, (now - last) / 1000 || 0);
       last = now;
       update(dt);
-      drawPitch(ctx, game);
-      game.players.slice().sort((a, b) => a.y - b.y).forEach((player) => drawPlayer(ctx, player));
-      drawBall(ctx, game.ball);
+      ctx.clearRect(0, 0, game.width, game.height);
       frame = requestAnimationFrame(render);
     };
 
