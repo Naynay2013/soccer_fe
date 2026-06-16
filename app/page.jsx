@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import * as THREE from "three";
 import {
   Activity,
@@ -572,7 +573,75 @@ function Radar({ score }) {
   );
 }
 
-function StadiumScene({ stadium }) {
+function createNumberTexture(number, shirt, ink = "#ffffff") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = shirt;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = ink;
+  ctx.font = "900 58px system-ui";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(number), 64, 68);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function makeHumanPlayer(player, jersey, x, z) {
+  const group = new THREE.Group();
+  const shirt = jersey?.primaryHex ?? (player.team === "GOLD" ? "#ffd447" : "#58a8ff");
+  const trim = jersey?.trimHex ?? "#ffffff";
+  const skin = player.skinTone ?? "#a66f4d";
+  const shirtMaterial = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.48, metalness: 0.04 });
+  const trimMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.5 });
+  const skinMaterial = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.62 });
+  const darkMaterial = new THREE.MeshStandardMaterial({ color: "#141414", roughness: 0.7 });
+
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(1.8, 3.4, 6, 14), shirtMaterial);
+  torso.position.y = 4.4;
+  torso.scale.set(0.86, 1, 0.62);
+  group.add(torso);
+
+  const number = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.2, 2.2),
+    new THREE.MeshBasicMaterial({ map: createNumberTexture(player.jerseyNumber, shirt, trim), transparent: true })
+  );
+  number.position.set(0, 4.75, 0.98);
+  group.add(number);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.04, 20, 20), skinMaterial);
+  head.position.y = 7.25;
+  group.add(head);
+
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(1.06, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.48), darkMaterial);
+  hair.position.y = 7.78;
+  group.add(hair);
+
+  [-1, 1].forEach((side) => {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 2.8, 6, 10), skinMaterial);
+    arm.position.set(side * 1.65, 4.55, 0.05);
+    arm.rotation.z = side * 0.38;
+    group.add(arm);
+
+    const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.44, 2.8, 6, 10), darkMaterial);
+    leg.position.set(side * 0.54, 1.8, 0);
+    leg.rotation.z = side * 0.08;
+    group.add(leg);
+
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.36, 1.35), trimMaterial);
+    boot.position.set(side * 0.54, 0.22, 0.18);
+    group.add(boot);
+  });
+
+  group.position.set(x, 0, z);
+  group.rotation.y = player.team === "GOLD" ? Math.PI * 0.04 : Math.PI;
+  return group;
+}
+
+function StadiumScene({ setup, running }) {
   const mountRef = useRef(null);
 
   useEffect(() => {
@@ -580,20 +649,28 @@ function StadiumScene({ stadium }) {
     if (!mount) return undefined;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 1200);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const stadium = setup?.stadium;
     const primary = new THREE.Color(stadium?.primaryHex ?? "#17633f");
     const accent = new THREE.Color(stadium?.accentHex ?? "#72ffc2");
+    const ballColor = new THREE.Color(setup?.ball?.primaryHex ?? "#f8fbff");
+    const ballAccent = new THREE.Color(setup?.ball?.accentHex ?? "#17211f");
+    const roster = setup?.rosterPlayers ?? [];
+    const goldJersey = setup?.homeJersey;
+    const blueJersey = setup?.awayJersey;
+    const animatedObjects = [];
     let frame = 0;
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.appendChild(renderer.domElement);
 
-    camera.position.set(0, 72, 118);
-    camera.lookAt(0, 0, 0);
+    camera.position.set(0, 64, 108);
+    camera.lookAt(0, 5, -8);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.58));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.48));
     const keyLight = new THREE.DirectionalLight(accent, 1.6);
     keyLight.position.set(-48, 90, 34);
     scene.add(keyLight);
@@ -601,18 +678,91 @@ function StadiumScene({ stadium }) {
     rimLight.position.set(52, 44, -52);
     scene.add(rimLight);
 
-    const standMaterial = new THREE.MeshStandardMaterial({ color: 0x15191f, roughness: 0.55, metalness: 0.18, transparent: true, opacity: 0.38 });
-    const accentMaterial = new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 0.25 });
+    const pitchMaterial = new THREE.MeshStandardMaterial({ color: primary, roughness: 0.78, metalness: 0.02 });
+    const stripeMaterial = new THREE.MeshStandardMaterial({ color: primary.clone().offsetHSL(0.02, 0.08, 0.08), roughness: 0.82 });
+    const pitch = new THREE.Mesh(new THREE.BoxGeometry(88, 1.1, 126), pitchMaterial);
+    pitch.position.set(0, -0.65, 0);
+    scene.add(pitch);
+
+    for (let i = 0; i < 10; i += 1) {
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(8.8, 1.14, 126), i % 2 ? stripeMaterial : pitchMaterial);
+      stripe.position.set(-39.6 + i * 8.8, -0.57, 0);
+      scene.add(stripe);
+    }
+
+    const lineMaterial = new THREE.MeshBasicMaterial({ color: "#f4fff8", transparent: true, opacity: 0.88 });
     [
-      [0, 8, -42, 112, 18, 12],
-      [0, 8, 42, 112, 18, 12],
-      [-60, 8, 0, 12, 18, 76],
-      [60, 8, 0, 12, 18, 76]
+      [0, 0.05, 0, 0.22, 0.1, 126],
+      [-44, 0.06, 0, 0.28, 0.1, 126],
+      [44, 0.06, 0, 0.28, 0.1, 126],
+      [0, 0.07, -63, 88, 0.1, 0.28],
+      [0, 0.07, 63, 88, 0.1, 0.28],
+      [0, 0.08, 0, 88, 0.1, 0.18]
     ].forEach(([x, y, z, w, h, d]) => {
-      const stand = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), standMaterial);
-      stand.position.set(x, y, z);
-      scene.add(stand);
+      const line = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lineMaterial);
+      line.position.set(x, y, z);
+      scene.add(line);
     });
+
+    const centerRing = new THREE.Mesh(
+      new THREE.TorusGeometry(12, 0.22, 8, 88),
+      lineMaterial
+    );
+    centerRing.rotation.x = Math.PI / 2;
+    centerRing.position.y = 0.12;
+    scene.add(centerRing);
+
+    const standMaterial = new THREE.MeshStandardMaterial({ color: 0x101820, roughness: 0.58, metalness: 0.12 });
+    const accentMaterial = new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 0.25 });
+
+    for (let tier = 0; tier < 4; tier += 1) {
+      const y = 6 + tier * 6;
+      const zBack = 76 + tier * 7;
+      const zFront = -76 - tier * 7;
+      const width = 122 + tier * 18;
+      const depth = 7;
+      [
+        [0, y, zBack, width, 4.5, depth],
+        [0, y, zFront, width, 4.5, depth],
+        [-62 - tier * 9, y, 0, depth, 4.5, 144 + tier * 10],
+        [62 + tier * 9, y, 0, depth, 4.5, 144 + tier * 10]
+      ].forEach(([x, sy, z, w, h, d]) => {
+        const stand = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), standMaterial);
+        stand.position.set(x, sy, z);
+        stand.rotation.x = z > 0 ? -0.12 : z < 0 ? 0.12 : 0;
+        scene.add(stand);
+      });
+    }
+
+    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x0a0f12, roughness: 0.3, metalness: 0.42, transparent: true, opacity: 0.74 });
+    [
+      [0, 34, 96, 168, 3, 18],
+      [0, 34, -96, 168, 3, 18],
+      [-90, 34, 0, 18, 3, 182],
+      [90, 34, 0, 18, 3, 182]
+    ].forEach(([x, y, z, w, h, d]) => {
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), roofMaterial);
+      roof.position.set(x, y, z);
+      scene.add(roof);
+    });
+
+    const crowdColors = ["#ffcf4d", "#58a8ff", "#ff5f6d", "#f5fff8", "#72ffc2"];
+    for (let i = 0; i < 180; i += 1) {
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.42, 8, 8),
+        new THREE.MeshStandardMaterial({ color: crowdColors[i % crowdColors.length], roughness: 0.65 })
+      );
+      const side = i % 4;
+      const lane = Math.floor(i / 4);
+      if (side < 2) {
+        dot.position.set(-70 + (lane % 45) * 3.1, 11 + (lane % 4) * 3.2, side === 0 ? 80 : -80);
+      } else {
+        dot.position.set(side === 2 ? -70 : 70, 11 + (lane % 4) * 3.2, -62 + (lane % 45) * 2.8);
+      }
+      animatedObjects.push(dot);
+      dot.userData.baseY = dot.position.y;
+      scene.add(dot);
+    }
 
     for (let i = 0; i < 44; i += 1) {
       const light = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.4, 0.4), accentMaterial);
@@ -620,6 +770,47 @@ function StadiumScene({ stadium }) {
       light.position.set(-50 + (i % 22) * 4.7, 19 + Math.sin(i) * 1.3, side * 48);
       scene.add(light);
     }
+
+    const floodMaterial = new THREE.MeshStandardMaterial({ color: 0xf4fff8, emissive: 0xf4fff8, emissiveIntensity: 1.6 });
+    [[-78, 42, -72], [78, 42, -72], [-78, 42, 72], [78, 42, 72]].forEach(([x, y, z]) => {
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.7, 42, 12), standMaterial);
+      mast.position.set(x, y - 20, z);
+      scene.add(mast);
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(10, 2.2, 5), floodMaterial);
+      panel.position.set(x, y, z);
+      panel.lookAt(0, 0, 0);
+      scene.add(panel);
+    });
+
+    const selectedRoster = roster.length ? roster : [
+      { displayName: "Mateo Cruz", jerseyNumber: 9, team: "GOLD", skinTone: "#9b6a45" },
+      { displayName: "Leo Hart", jerseyNumber: 10, team: "GOLD", skinTone: "#d49b6a" },
+      { displayName: "Andre Silva", jerseyNumber: 11, team: "BLUE", skinTone: "#a66f4d" },
+      { displayName: "Milan Fox", jerseyNumber: 8, team: "BLUE", skinTone: "#c88b62" }
+    ];
+    const positions = [[-20, -16], [-8, 18], [17, -12], [26, 22], [-32, 36], [34, -36], [0, -34], [0, 34]];
+    selectedRoster.slice(0, 8).forEach((player, index) => {
+      const [x, z] = positions[index] ?? [0, 0];
+      const human = makeHumanPlayer(player, player.team === "GOLD" ? goldJersey : blueJersey, x, z);
+      human.scale.setScalar(1.25);
+      animatedObjects.push(human);
+      human.userData.baseY = human.position.y;
+      scene.add(human);
+    });
+
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(1.25, 24, 24),
+      new THREE.MeshStandardMaterial({ color: ballColor, roughness: 0.32, metalness: 0.08 })
+    );
+    ball.position.set(0, 1.2, 0);
+    scene.add(ball);
+    const ballStripe = new THREE.Mesh(
+      new THREE.TorusGeometry(1.28, 0.08, 6, 36),
+      new THREE.MeshBasicMaterial({ color: ballAccent })
+    );
+    ballStripe.position.copy(ball.position);
+    ballStripe.rotation.x = Math.PI / 2;
+    scene.add(ballStripe);
 
     const resize = () => {
       const rect = mount.getBoundingClientRect();
@@ -629,7 +820,16 @@ function StadiumScene({ stadium }) {
     };
 
     const animate = () => {
-      scene.rotation.y = Math.sin(performance.now() / 4200) * 0.045;
+      const time = performance.now() / 1000;
+      scene.rotation.y = Math.sin(time / 4.2) * 0.025;
+      ball.position.x = Math.sin(time * 0.8) * 7;
+      ball.position.z = Math.cos(time * 0.72) * 5;
+      ball.rotation.x += 0.035;
+      ballStripe.position.copy(ball.position);
+      ballStripe.rotation.z += 0.05;
+      animatedObjects.forEach((object, index) => {
+        object.position.y = object.userData.baseY + Math.sin(time * 2 + index) * (running ? 0.18 : 0.05);
+      });
       renderer.render(scene, camera);
       frame = requestAnimationFrame(animate);
     };
@@ -644,12 +844,12 @@ function StadiumScene({ stadium }) {
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };
-  }, [stadium]);
+  }, [setup, running]);
 
   return (
     <div
       className="stadium-3d"
-      style={{ "--stadium-image": `url(${stadium?.imageUrl ?? "/stadiums/apex-dome.png"})` }}
+      style={{ "--stadium-image": `url(${setup?.stadium?.imageUrl ?? "/stadiums/apex-dome.png"})` }}
       aria-hidden="true"
     >
       <div ref={mountRef} />
@@ -667,12 +867,25 @@ function GameSetupPanel({ catalog, selected, onSelect, collapsed, setCollapsed }
   const bluePlayers = roster.filter((player) => player.team === "BLUE").slice(0, 4);
 
   return (
-    <div className={`setup-panel ${collapsed ? "closed" : ""}`}>
+    <motion.div
+      className={`setup-panel ${collapsed ? "closed" : ""}`}
+      layout
+      initial={{ opacity: 0, x: 18 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ type: "spring", stiffness: 260, damping: 28 }}
+    >
       <button className="panel-toggle" type="button" onClick={() => setCollapsed((value) => !value)}>
         {collapsed ? "Open Setup" : "Close Setup"}
       </button>
-      {!collapsed && (
-        <>
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            className="setup-panel-body"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22 }}
+          >
           <div className="panel-title">
             <Crown size={17} aria-hidden="true" />
             <strong>Match Setup</strong>
@@ -718,9 +931,10 @@ function GameSetupPanel({ catalog, selected, onSelect, collapsed, setCollapsed }
               </div>
             ))}
           </div>
-        </>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
 
@@ -1071,7 +1285,8 @@ export default function Home() {
           ball: nextCatalog.balls?.[0],
           mode: nextCatalog.modes?.[0],
           homeJersey: nextCatalog.jerseys?.find((item) => item.team === "GOLD"),
-          awayJersey: nextCatalog.jerseys?.find((item) => item.team === "BLUE")
+          awayJersey: nextCatalog.jerseys?.find((item) => item.team === "BLUE"),
+          rosterPlayers: nextCatalog.rosterPlayers ?? []
         });
         setApiState("Connected");
       } catch {
@@ -1414,7 +1629,7 @@ export default function Home() {
         </aside>
 
         <section className="pitch-wrap">
-          <StadiumScene stadium={selectedSetup.stadium} />
+          <StadiumScene setup={selectedSetup} running={running} />
           <div className="pitch-chrome top">
             <span>{selectedSetup.stadium?.name ?? "Street Cup Arena"}</span>
             <strong>{selectedSetup.mode?.name ?? status}</strong>
