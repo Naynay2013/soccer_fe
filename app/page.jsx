@@ -1515,45 +1515,49 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     kneecap.scale.set(0.96, 0.52, 0.38);
     legGroup.add(kneecap);
 
+    const lowerLeg = new THREE.Group();
+    lowerLeg.position.y = -1.56;
+    legGroup.add(lowerLeg);
+
     const sock = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 1.28, 10, 16), trimMaterial);
-    sock.position.y = -2.14;
+    sock.position.y = -0.58;
     sock.scale.set(0.9, 1.0, 0.74);
-    legGroup.add(sock);
+    lowerLeg.add(sock);
 
     const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.92, 8, 12), trimMaterial);
-    calf.position.set(0.025 * side, -2.12, -0.12);
+    calf.position.set(0.025 * side, -0.56, -0.12);
     calf.scale.set(0.74, 1.0, 0.48);
-    legGroup.add(calf);
+    lowerLeg.add(calf);
 
     const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.92, 8, 10), seamMaterial);
-    shin.position.set(-0.02 * side, -2.08, 0.16);
+    shin.position.set(-0.02 * side, -0.52, 0.16);
     shin.scale.set(0.42, 1.0, 0.18);
-    legGroup.add(shin);
+    lowerLeg.add(shin);
 
     const sockBand = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.065, 0.28), seamMaterial);
-    sockBand.position.y = -1.62;
-    legGroup.add(sockBand);
+    sockBand.position.y = -0.06;
+    lowerLeg.add(sockBand);
     const ankle = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.12, 0.22, 12), trimMaterial);
-    ankle.position.y = -2.66;
-    legGroup.add(ankle);
+    ankle.position.y = -1.1;
+    lowerLeg.add(ankle);
 
     const boot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.72), bootMaterial);
-    boot.position.set(0, -2.78, 0.16);
+    boot.position.set(0, -1.22, 0.16);
     boot.rotation.x = -0.08;
-    legGroup.add(boot);
+    lowerLeg.add(boot);
     const toe = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.32), bootMaterial);
-    toe.position.set(0, -2.75, 0.52);
+    toe.position.set(0, -1.19, 0.52);
     toe.rotation.x = -0.18;
-    legGroup.add(toe);
+    lowerLeg.add(toe);
     const heel = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.18), bootMaterial);
-    heel.position.set(0, -2.76, -0.2);
+    heel.position.set(0, -1.2, -0.2);
     heel.rotation.x = 0.08;
-    legGroup.add(heel);
+    lowerLeg.add(heel);
     const lace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.22), laceMaterial);
-    lace.position.set(0, -2.64, 0.28);
+    lace.position.set(0, -1.08, 0.28);
     lace.rotation.x = -0.16;
-    legGroup.add(lace);
-    rig.legs.push({ group: legGroup, side, boot, toe, thigh, sock, knee });
+    lowerLeg.add(lace);
+    rig.legs.push({ group: legGroup, lowerLeg, side, boot, toe, thigh, sock, knee });
     group.add(legGroup);
   });
 
@@ -1838,6 +1842,10 @@ function StadiumScene({ setup, running, gameStateRef }) {
       human.userData.gameIndex = index;
       human.userData.lastFieldX = x;
       human.userData.lastFieldZ = z;
+      human.userData.animClock = index * 0.37;
+      human.userData.lastAnimTime = 0;
+      human.userData.smoothedSpeed = 0;
+      human.userData.turnLean = 0;
       scene.add(human);
     });
 
@@ -1852,6 +1860,10 @@ function StadiumScene({ setup, running, gameStateRef }) {
     referee.rotation.y = Math.PI * 0.18;
     referee.userData.baseY = referee.position.y;
     referee.userData.phase = 4.8;
+    referee.userData.animClock = 1.6;
+    referee.userData.lastAnimTime = 0;
+    referee.userData.smoothedSpeed = 0;
+    referee.userData.turnLean = 0;
     animatedObjects.push(referee);
     scene.add(referee);
 
@@ -1893,55 +1905,98 @@ function StadiumScene({ setup, running, gameStateRef }) {
       ballStripe.rotation.z += 0.05;
       animatedObjects.forEach((object, index) => {
         const phase = object.userData.phase ?? index;
-        object.position.y = object.userData.baseY + Math.sin(time * 2.4 + phase) * (running ? 0.22 : 0.05);
         if (object.userData.rig) {
           const simPlayer = Number.isInteger(object.userData.gameIndex) ? gameSnapshot?.players?.[object.userData.gameIndex] : null;
-          let motion = running ? 0.42 : 0.18;
-          let stride = Math.sin(time * (running ? 2.1 : 1.15) + phase);
+          const previousTime = object.userData.lastAnimTime || time;
+          const delta = THREE.MathUtils.clamp(time - previousTime, 1 / 120, 1 / 20);
+          object.userData.lastAnimTime = time;
           let velocity = 0;
+          let targetSpeed = running ? 0.35 : 0.08;
+          let worldVx = 0;
+          let worldVz = 0;
           if (simPlayer) {
             const next = toField(simPlayer.x, simPlayer.y, gameSnapshot.width, gameSnapshot.height);
             velocity = Math.hypot(simPlayer.vx, simPlayer.vy);
-            motion = THREE.MathUtils.clamp(velocity / 220, 0.08, 0.95);
-            stride = Math.sin(time * (1.65 + motion * 2.65) + phase);
+            targetSpeed = THREE.MathUtils.clamp(velocity / 260, 0.04, 1.0);
+            worldVx = (next.x - (object.userData.lastFieldX ?? next.x)) / delta;
+            worldVz = (next.z - (object.userData.lastFieldZ ?? next.z)) / delta;
             object.position.x = THREE.MathUtils.lerp(object.position.x, next.x, 0.18);
             object.position.z = THREE.MathUtils.lerp(object.position.z, next.z, 0.18);
             object.userData.lastFieldX = next.x;
             object.userData.lastFieldZ = next.z;
           } else {
-            object.position.x = object.userData.homeX + Math.sin(time * 0.42 + phase) * motion * 1.2;
-            object.position.z = object.userData.homeZ + Math.cos(time * 0.36 + phase) * motion * 0.8;
+            const roamX = object.userData.homeX + Math.sin(time * 0.42 + phase) * targetSpeed * 1.2;
+            const roamZ = object.userData.homeZ + Math.cos(time * 0.36 + phase) * targetSpeed * 0.8;
+            worldVx = (roamX - object.position.x) / delta;
+            worldVz = (roamZ - object.position.z) / delta;
+            object.position.x = roamX;
+            object.position.z = roamZ;
           }
-          object.rotation.z = Math.sin(time * 2 + phase) * motion * 0.018;
+          object.userData.smoothedSpeed = THREE.MathUtils.lerp(object.userData.smoothedSpeed ?? 0, targetSpeed, 0.12);
+          const motion = object.userData.smoothedSpeed;
+          const sprint = THREE.MathUtils.smoothstep(motion, 0.48, 0.98);
+          const walk = THREE.MathUtils.smoothstep(motion, 0.06, 0.36);
+          const cadence = 1.25 + walk * 2.2 + sprint * 2.6;
+          object.userData.animClock = (object.userData.animClock ?? phase) + delta * cadence;
+          const gait = object.userData.animClock + phase * 0.12;
+          const stride = Math.sin(gait);
+          const strideOpposite = Math.sin(gait + Math.PI);
+          const plantWave = Math.cos(gait);
+          const bounce = Math.abs(Math.sin(gait)) * (0.04 + motion * 0.17);
+          const idleBreath = Math.sin(time * 1.45 + phase) * 0.035;
           const faceAngle = simPlayer && Math.hypot(simPlayer.vx, simPlayer.vy) > 10
             ? Math.atan2(simPlayer.vx, simPlayer.vy)
             : Math.atan2(ball.position.x - object.position.x, ball.position.z - object.position.z);
-          object.rotation.y = THREE.MathUtils.lerp(object.rotation.y, faceAngle, 0.04);
-          const lift = Math.max(0, Math.sin(time * (1.65 + motion * 2.65) + phase));
+          const previousFacing = object.rotation.y;
+          object.rotation.y = THREE.MathUtils.lerp(object.rotation.y, faceAngle, 0.055 + sprint * 0.045);
+          const turnDelta = Math.atan2(Math.sin(faceAngle - previousFacing), Math.cos(faceAngle - previousFacing));
+          object.userData.turnLean = THREE.MathUtils.lerp(object.userData.turnLean ?? 0, THREE.MathUtils.clamp(turnDelta * 2.2, -0.42, 0.42), 0.12);
+          const turnLean = object.userData.turnLean;
+          const accelerationLean = THREE.MathUtils.clamp((Math.hypot(worldVx, worldVz) / 45) * 0.04 + sprint * 0.1, 0, 0.18);
           const keeperDive = simPlayer?.role === "Keeper" && velocity > 180 ? THREE.MathUtils.clamp(simPlayer.vx / 320, -0.55, 0.55) : 0;
-          object.userData.rig.torso.rotation.x = THREE.MathUtils.lerp(object.userData.rig.torso.rotation.x, motion * 0.08, 0.1);
-          object.userData.rig.torso.rotation.z = THREE.MathUtils.lerp(object.userData.rig.torso.rotation.z, keeperDive || Math.sin(time * 1.7 + phase) * motion * 0.035, 0.08);
-          object.userData.rig.head.rotation.x = THREE.MathUtils.lerp(object.userData.rig.head.rotation.x, -motion * 0.045, 0.08);
-          object.userData.rig.head.rotation.z = THREE.MathUtils.lerp(object.userData.rig.head.rotation.z, -keeperDive * 0.45, 0.08);
+          object.position.y = object.userData.baseY + bounce + idleBreath * (1 - walk);
+          object.rotation.x = THREE.MathUtils.lerp(object.rotation.x, -accelerationLean + keeperDive * 0.15, 0.08);
+          object.rotation.z = THREE.MathUtils.lerp(object.rotation.z, turnLean * 0.18 + Math.sin(gait * 2) * motion * 0.018, 0.1);
+          const hipSway = Math.sin(gait) * motion * 0.065;
+          const shoulderCounter = Math.sin(gait + Math.PI) * motion * 0.085;
+          object.userData.rig.torso.rotation.x = THREE.MathUtils.lerp(object.userData.rig.torso.rotation.x, accelerationLean + idleBreath * 0.35, 0.12);
+          object.userData.rig.torso.rotation.y = THREE.MathUtils.lerp(object.userData.rig.torso.rotation.y, shoulderCounter - turnLean * 0.28, 0.12);
+          object.userData.rig.torso.rotation.z = THREE.MathUtils.lerp(object.userData.rig.torso.rotation.z, keeperDive || hipSway + turnLean * 0.32, 0.12);
+          object.userData.rig.head.rotation.x = THREE.MathUtils.lerp(object.userData.rig.head.rotation.x, -accelerationLean * 0.38 + idleBreath * 0.25, 0.12);
+          object.userData.rig.head.rotation.y = THREE.MathUtils.lerp(object.userData.rig.head.rotation.y, -shoulderCounter * 0.42, 0.1);
+          object.userData.rig.head.rotation.z = THREE.MathUtils.lerp(object.userData.rig.head.rotation.z, -keeperDive * 0.45 - turnLean * 0.22, 0.1);
           object.userData.rig.arms.forEach(({ group, side, hand }) => {
-            const armDrive = stride * side * motion;
-            group.rotation.x = THREE.MathUtils.lerp(group.rotation.x, armDrive * 0.42 + keeperDive * 0.6, 0.18);
-            group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, side * (0.2 + motion * 0.04) + keeperDive * 0.55, 0.16);
+            const armDrive = (side > 0 ? strideOpposite : stride) * motion;
+            const guardLift = simPlayer?.role === "Keeper" ? 0.18 + sprint * 0.28 : 0;
+            group.rotation.x = THREE.MathUtils.lerp(group.rotation.x, armDrive * (0.58 + sprint * 0.28) + keeperDive * 0.74 - guardLift, 0.2);
+            group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, -side * turnLean * 0.42, 0.16);
+            group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, side * (0.14 + motion * 0.06) + keeperDive * 0.55 + Math.abs(armDrive) * 0.05, 0.18);
             if (hand) {
-              hand.rotation.z = THREE.MathUtils.lerp(hand.rotation.z, -side * armDrive * 0.28, 0.18);
+              hand.rotation.x = THREE.MathUtils.lerp(hand.rotation.x, -Math.abs(armDrive) * 0.22, 0.18);
+              hand.rotation.z = THREE.MathUtils.lerp(hand.rotation.z, -side * armDrive * 0.34, 0.18);
             }
           });
-          object.userData.rig.legs.forEach(({ group, side, boot, toe, sock, knee }) => {
-            const legPhase = stride * side;
-            const plant = Math.max(0, -legPhase);
-            const swing = Math.max(0, legPhase);
-            group.rotation.x = THREE.MathUtils.lerp(group.rotation.x, -legPhase * motion * 0.42, 0.18);
-            group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, side * (0.04 + motion * 0.012) - keeperDive * 0.25, 0.16);
-            boot.rotation.x = THREE.MathUtils.lerp(boot.rotation.x, -0.1 + plant * motion * 0.3, 0.22);
-            boot.position.y = THREE.MathUtils.lerp(boot.position.y, -2.78 + lift * motion * 0.1, 0.22);
-            toe.rotation.x = THREE.MathUtils.lerp(toe.rotation.x, -0.18 + plant * motion * 0.25, 0.22);
-            sock.rotation.x = THREE.MathUtils.lerp(sock.rotation.x, swing * motion * 0.14, 0.18);
-            knee.position.z = THREE.MathUtils.lerp(knee.position.z, swing * motion * 0.08, 0.18);
+          object.userData.rig.legs.forEach(({ group, lowerLeg, side, boot, toe, sock, knee }) => {
+            const legDrive = side > 0 ? stride : strideOpposite;
+            const plant = Math.max(0, -legDrive);
+            const toeOff = Math.max(0, plantWave * side);
+            const swing = Math.max(0, legDrive);
+            const recovery = Math.max(0, Math.cos(gait + (side > 0 ? 0 : Math.PI)));
+            const footLift = swing * (0.08 + sprint * 0.2) + recovery * sprint * 0.04;
+            const thighSwing = -legDrive * motion * (0.58 + sprint * 0.24);
+            const kneeBend = (swing * (0.5 + sprint * 0.55) + recovery * (0.22 + sprint * 0.2) - plant * 0.12) * motion;
+            group.rotation.x = THREE.MathUtils.lerp(group.rotation.x, thighSwing, 0.24);
+            group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, side * turnLean * 0.22, 0.16);
+            group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, side * (0.035 + motion * 0.018) - keeperDive * 0.25, 0.18);
+            lowerLeg.rotation.x = THREE.MathUtils.lerp(lowerLeg.rotation.x, kneeBend, 0.26);
+            lowerLeg.rotation.z = THREE.MathUtils.lerp(lowerLeg.rotation.z, -side * turnLean * 0.08, 0.16);
+            boot.rotation.x = THREE.MathUtils.lerp(boot.rotation.x, -0.1 + plant * motion * 0.18 - toeOff * motion * 0.24 - swing * sprint * 0.12, 0.26);
+            boot.rotation.z = THREE.MathUtils.lerp(boot.rotation.z, side * turnLean * 0.1, 0.16);
+            boot.position.y = THREE.MathUtils.lerp(boot.position.y, -1.22 + footLift, 0.26);
+            boot.position.z = THREE.MathUtils.lerp(boot.position.z, 0.16 + swing * motion * 0.1 - plant * motion * 0.05, 0.2);
+            toe.rotation.x = THREE.MathUtils.lerp(toe.rotation.x, -0.18 + plant * motion * 0.34 + toeOff * motion * 0.26 - swing * sprint * 0.1, 0.26);
+            sock.rotation.x = THREE.MathUtils.lerp(sock.rotation.x, -kneeBend * 0.12, 0.2);
+            knee.position.z = THREE.MathUtils.lerp(knee.position.z, swing * motion * 0.14 + sprint * 0.025, 0.22);
           });
         }
       });
