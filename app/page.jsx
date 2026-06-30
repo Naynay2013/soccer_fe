@@ -809,6 +809,48 @@ function createNumberTexture(number, shirt, ink = "#ffffff") {
   return texture;
 }
 
+function seededNoise(seed, index) {
+  return Math.sin(seed * 37.17 + index * 91.91) * 0.5 + 0.5;
+}
+
+function createSkinTexture(baseHex, seed) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  const base = new THREE.Color(baseHex);
+  const highlight = base.clone().lerp(new THREE.Color("#ffd0aa"), 0.22);
+  const shadow = base.clone().lerp(new THREE.Color("#311713"), 0.28);
+  ctx.fillStyle = `#${base.getHexString()}`;
+  ctx.fillRect(0, 0, 256, 256);
+
+  const glow = ctx.createRadialGradient(116, 86, 8, 116, 86, 132);
+  glow.addColorStop(0, `rgba(${Math.floor(highlight.r * 255)}, ${Math.floor(highlight.g * 255)}, ${Math.floor(highlight.b * 255)}, 0.34)`);
+  glow.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, 256, 256);
+
+  for (let i = 0; i < 220; i += 1) {
+    const x = seededNoise(seed, i) * 256;
+    const y = seededNoise(seed + 5, i) * 256;
+    const alpha = 0.018 + seededNoise(seed + 11, i) * 0.035;
+    ctx.fillStyle = seededNoise(seed + 19, i) > 0.5
+      ? `rgba(255,230,210,${alpha})`
+      : `rgba(${Math.floor(shadow.r * 255)}, ${Math.floor(shadow.g * 255)}, ${Math.floor(shadow.b * 255)}, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 0.6 + seededNoise(seed + 23, i) * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = `rgba(${Math.floor(shadow.r * 255)}, ${Math.floor(shadow.g * 255)}, ${Math.floor(shadow.b * 255)}, 0.22)`;
+  ctx.fillRect(0, 188, 256, 68);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
 function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const group = new THREE.Group();
   const profileSeed = (player.jerseyNumber ?? index + 7) + index * 3;
@@ -819,16 +861,28 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const hairPalette = ["#16100c", "#3a2418", "#6b3f22", "#201713", "#0d0d0e", "#7a4b2b"];
   const skin = player.skinTone ?? skinPalette[profileSeed % skinPalette.length];
   const buildScale = 0.94 + (profileSeed % 5) * 0.025;
-  const shirtMaterial = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.5, metalness: 0.02 });
+  const skinColor = new THREE.Color(skin);
+  const hairColor = new THREE.Color(hairPalette[profileSeed % hairPalette.length]);
+  const lipColor = skinColor.clone().lerp(new THREE.Color("#6f3038"), 0.34);
+  const cheekColor = skinColor.clone().lerp(new THREE.Color("#e7a287"), 0.16);
+  const shadowSkin = skinColor.clone().lerp(new THREE.Color("#2d1715"), 0.22);
+  const skinTexture = createSkinTexture(skin, profileSeed);
+  const shirtMaterial = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.44, metalness: 0.02 });
   const shortsMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.58, metalness: 0.02 });
   const trimMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.46 });
-  const skinMaterial = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6 });
-  const hairMaterial = new THREE.MeshStandardMaterial({ color: hairPalette[profileSeed % hairPalette.length], roughness: 0.84 });
+  const skinMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", map: skinTexture, roughness: 0.48, metalness: 0.015 });
+  const cheekMaterial = new THREE.MeshStandardMaterial({ color: cheekColor, roughness: 0.54, transparent: true, opacity: 0.88 });
+  const shadowSkinMaterial = new THREE.MeshStandardMaterial({ color: shadowSkin, roughness: 0.64 });
+  const lipMaterial = new THREE.MeshStandardMaterial({ color: lipColor, roughness: 0.46 });
+  const hairMaterial = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.88 });
+  const stubbleMaterial = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.92, transparent: true, opacity: 0.72 });
   const seamMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.38, metalness: 0.02 });
   const bootMaterial = new THREE.MeshStandardMaterial({ color: profileSeed % 2 ? "#10151b" : "#f5f7ef", roughness: 0.42, metalness: 0.08 });
   const laceMaterial = new THREE.MeshBasicMaterial({ color: profileSeed % 2 ? "#f5f7ef" : "#10151b" });
   const eyeWhite = new THREE.MeshBasicMaterial({ color: "#fffaf1" });
   const eyeDark = new THREE.MeshBasicMaterial({ color: "#161616" });
+  const irisMaterial = new THREE.MeshBasicMaterial({ color: ["#2f4b5f", "#3b2a1f", "#1f513d", "#5a3a1e"][profileSeed % 4] });
+  const highlightMaterial = new THREE.MeshBasicMaterial({ color: "#ffffff" });
 
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.78, 2.98, 10, 22), shirtMaterial);
   torso.position.y = 4.72;
@@ -880,36 +934,48 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   number.position.set(0, 4.82, 0.6);
   group.add(number);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 32, 26), skinMaterial);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 42, 32), skinMaterial);
   head.position.y = 7.2;
-  head.scale.set(0.78 + (profileSeed % 3) * 0.04, 1.04 + (profileSeed % 4) * 0.035, 0.72);
+  head.scale.set(0.76 + (profileSeed % 3) * 0.04, 1.06 + (profileSeed % 4) * 0.035, 0.7);
   group.add(head);
 
-  const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 14), skinMaterial);
-  jaw.position.set(0, 6.88, 0.08);
-  jaw.scale.set(0.92, 0.42, 0.74);
+  const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.44, 26, 18), skinMaterial);
+  jaw.position.set(0, 6.88, 0.1);
+  jaw.scale.set(0.88, 0.46, 0.7);
   group.add(jaw);
 
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.64, 20, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMaterial);
-  hair.position.set(0, 7.62, -0.03);
-  hair.scale.set(0.9, 0.62, 0.82);
+  const chin = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 12), skinMaterial);
+  chin.position.set(0, 6.68, 0.38);
+  chin.scale.set(1.25, 0.5, 0.6);
+  group.add(chin);
+
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.65, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), hairMaterial);
+  hair.position.set(0, 7.64, -0.04);
+  hair.scale.set(0.92, 0.58, 0.82);
   group.add(hair);
 
   [-1, 1].forEach((side) => {
-    const fade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.48, 0.16), hairMaterial);
-    fade.position.set(side * 0.47, 7.42, -0.08);
+    const fade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.18), hairMaterial);
+    fade.position.set(side * 0.47, 7.38, -0.08);
     fade.rotation.z = side * 0.12;
     group.add(fade);
+
+    const temple = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), shadowSkinMaterial);
+    temple.position.set(side * 0.45, 7.27, 0.25);
+    temple.scale.set(0.55, 1.2, 0.5);
+    group.add(temple);
   });
 
   const hairStyle = profileSeed % 4;
   if (hairStyle === 0 || hairStyle === 2) {
-    for (let i = -2; i <= 2; i += 1) {
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42 + (hairStyle === 2 ? 0.18 : 0), 8), hairMaterial);
-      spike.position.set(i * 0.16, 7.9 - Math.abs(i) * 0.04, 0.1);
-      spike.rotation.x = -0.42;
-      spike.rotation.z = i * 0.1;
-      group.add(spike);
+    for (let row = 0; row < 3; row += 1) {
+      for (let col = -3; col <= 3; col += 1) {
+        if (Math.abs(col) === 3 && row === 2) continue;
+        const curl = new THREE.Mesh(new THREE.SphereGeometry(0.1 + row * 0.012, 10, 8), hairMaterial);
+        curl.position.set(col * 0.13, 7.78 + row * 0.08 - Math.abs(col) * 0.012, 0.08 - row * 0.13);
+        curl.scale.set(1.0, 0.72, 0.85);
+        group.add(curl);
+      }
     }
   } else if (hairStyle === 1) {
     const bun = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10), hairMaterial);
@@ -923,45 +989,96 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   }
 
   [-1, 1].forEach((side) => {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), skinMaterial);
-    ear.position.set(side * 0.51, 7.2, 0.03);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), skinMaterial);
+    ear.position.set(side * 0.52, 7.18, 0.02);
+    ear.scale.set(0.72, 1.18, 0.5);
     group.add(ear);
 
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), eyeWhite);
-    eye.position.set(side * 0.2, 7.27, 0.49);
+    const innerEar = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), shadowSkinMaterial);
+    innerEar.position.set(side * 0.535, 7.16, 0.05);
+    innerEar.scale.set(0.42, 0.85, 0.28);
+    group.add(innerEar);
+
+    const browRidge = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 10), skinMaterial);
+    browRidge.position.set(side * 0.2, 7.39, 0.43);
+    browRidge.scale.set(1.32, 0.36, 0.28);
+    group.add(browRidge);
+
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.105, 18, 12), eyeWhite);
+    eye.position.set(side * 0.205, 7.25, 0.51);
+    eye.scale.set(1.25, 0.72, 0.46);
     group.add(eye);
 
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), eyeDark);
-    pupil.position.set(side * 0.205, 7.25, 0.57);
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), irisMaterial);
+    iris.position.set(side * 0.207, 7.245, 0.585);
+    iris.scale.set(1.0, 0.78, 0.2);
+    group.add(iris);
+
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 8), eyeDark);
+    pupil.position.set(side * 0.208, 7.244, 0.608);
     group.add(pupil);
 
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.05), hairMaterial);
-    brow.position.set(side * 0.2, 7.46, 0.52);
+    const catchlight = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), highlightMaterial);
+    catchlight.position.set(side * 0.185, 7.268, 0.626);
+    group.add(catchlight);
+
+    const upperLid = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.035, 0.035), shadowSkinMaterial);
+    upperLid.position.set(side * 0.205, 7.31, 0.55);
+    upperLid.rotation.z = -side * 0.03;
+    group.add(upperLid);
+
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.055, 0.055), hairMaterial);
+    brow.position.set(side * 0.205, 7.47, 0.51);
     brow.rotation.z = -side * (0.08 + (profileSeed % 3) * 0.04);
     group.add(brow);
 
-    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), skinMaterial);
-    cheek.position.set(side * 0.26, 7.06, 0.5);
-    cheek.scale.set(1.4, 0.52, 0.62);
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), cheekMaterial);
+    cheek.position.set(side * 0.28, 7.04, 0.48);
+    cheek.scale.set(1.55, 0.58, 0.58);
     group.add(cheek);
+
+    const cheekbone = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skinMaterial);
+    cheekbone.position.set(side * 0.32, 7.12, 0.35);
+    cheekbone.scale.set(1.1, 0.36, 0.5);
+    group.add(cheekbone);
   });
 
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22 + (profileSeed % 3) * 0.025, 10), skinMaterial);
-  nose.position.set(0, 7.12, 0.58);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.28 + (profileSeed % 3) * 0.025, 14), skinMaterial);
+  nose.position.set(0, 7.13, 0.58);
   nose.rotation.x = Math.PI / 2;
   group.add(nose);
 
-  if (profileSeed % 3 === 0) {
-    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.4, 18, 10), hairMaterial);
-    beard.position.set(0, 6.9, 0.16);
-    beard.scale.set(0.82, 0.34, 0.48);
-    group.add(beard);
-  }
+  const noseBridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.07), skinMaterial);
+  noseBridge.position.set(0, 7.29, 0.49);
+  noseBridge.rotation.x = -0.16;
+  group.add(noseBridge);
 
-  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.012, 6, 18, Math.PI), eyeDark);
-  smile.position.set(0, 6.94, 0.54);
-  smile.rotation.set(0, 0, Math.PI);
-  group.add(smile);
+  const upperLip = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.24, 6, 10), lipMaterial);
+  upperLip.position.set(0, 6.95, 0.58);
+  upperLip.rotation.z = Math.PI / 2;
+  upperLip.scale.set(1.2, 0.5, 0.28);
+  group.add(upperLip);
+
+  const lowerLip = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.3, 6, 10), lipMaterial);
+  lowerLip.position.set(0, 6.87, 0.57);
+  lowerLip.rotation.z = Math.PI / 2;
+  lowerLip.scale.set(1.2, 0.44, 0.24);
+  group.add(lowerLip);
+
+  const mouthShadow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.025, 0.025), eyeDark);
+  mouthShadow.position.set(0, 6.92, 0.61);
+  group.add(mouthShadow);
+
+  if (profileSeed % 3 === 0 || profileSeed % 5 === 0) {
+    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.42, 22, 12), stubbleMaterial);
+    beard.position.set(0, 6.88, 0.17);
+    beard.scale.set(0.86, 0.4, 0.5);
+    group.add(beard);
+
+    const moustache = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.045), stubbleMaterial);
+    moustache.position.set(0, 7.0, 0.6);
+    group.add(moustache);
+  }
 
   const rig = { arms: [], legs: [], torso, head };
   [-1, 1].forEach((side) => {
@@ -1018,6 +1135,12 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
 
   group.position.set(x, 0, z);
   group.rotation.y = player.team === "GOLD" ? Math.PI * 0.02 : Math.PI;
+  group.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
   group.userData.rig = rig;
   group.userData.homeX = x;
   group.userData.homeZ = z;
@@ -1083,6 +1206,8 @@ function StadiumScene({ setup, running, gameStateRef }) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
 
     camera.position.copy(cameraDesired);
@@ -1092,6 +1217,12 @@ function StadiumScene({ setup, running, gameStateRef }) {
     scene.add(new THREE.AmbientLight(0xffffff, 0.58));
     const keyLight = new THREE.DirectionalLight(accent, 1.6);
     keyLight.position.set(-48, 90, 34);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.left = -70;
+    keyLight.shadow.camera.right = 70;
+    keyLight.shadow.camera.top = 90;
+    keyLight.shadow.camera.bottom = -90;
     scene.add(keyLight);
     const rimLight = new THREE.PointLight(0xffffff, 1.2, 260);
     rimLight.position.set(52, 44, -52);
@@ -1101,11 +1232,13 @@ function StadiumScene({ setup, running, gameStateRef }) {
     const stripeMaterial = new THREE.MeshStandardMaterial({ color: primary.clone().offsetHSL(0.02, 0.1, 0.1), roughness: 0.9 });
     const pitch = new THREE.Mesh(new THREE.BoxGeometry(88, 1.1, 126), pitchMaterial);
     pitch.position.set(0, -0.65, 0);
+    pitch.receiveShadow = true;
     scene.add(pitch);
 
     for (let i = 0; i < 10; i += 1) {
       const stripe = new THREE.Mesh(new THREE.BoxGeometry(8.8, 1.14, 126), i % 2 ? stripeMaterial : pitchMaterial);
       stripe.position.set(-39.6 + i * 8.8, -0.57, 0);
+      stripe.receiveShadow = true;
       scene.add(stripe);
     }
 
