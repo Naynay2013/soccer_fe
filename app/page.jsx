@@ -1004,6 +1004,152 @@ function createFaceTexture(baseHex, hairHex, irisHex, seed) {
   return texture;
 }
 
+function createHeadTexture(baseHex, hairHex, irisHex, seed) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  const skin = new THREE.Color(baseHex);
+  const hair = new THREE.Color(hairHex);
+  const iris = new THREE.Color(irisHex);
+  const light = skin.clone().lerp(new THREE.Color("#ffd4b8"), 0.24);
+  const warm = skin.clone().lerp(new THREE.Color("#da806b"), 0.16);
+  const shadow = skin.clone().lerp(new THREE.Color("#190b0a"), 0.34);
+  const lip = skin.clone().lerp(new THREE.Color("#71313c"), 0.42);
+
+  const baseGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  baseGradient.addColorStop(0, `rgb(${colorToRgb(shadow)})`);
+  baseGradient.addColorStop(0.28, `rgb(${colorToRgb(skin)})`);
+  baseGradient.addColorStop(0.5, `rgb(${colorToRgb(light)})`);
+  baseGradient.addColorStop(0.72, `rgb(${colorToRgb(skin)})`);
+  baseGradient.addColorStop(1, `rgb(${colorToRgb(shadow)})`);
+  ctx.fillStyle = baseGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const faceX = 512;
+  const faceGlow = ctx.createRadialGradient(faceX - 42, 212, 16, faceX, 260, 250);
+  faceGlow.addColorStop(0, `rgba(${colorToRgb(light)}, 0.5)`);
+  faceGlow.addColorStop(0.62, `rgba(${colorToRgb(skin)}, 0.22)`);
+  faceGlow.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = faceGlow;
+  ctx.fillRect(278, 26, 468, 430);
+
+  for (let i = 0; i < 1300; i += 1) {
+    const x = seededNoise(seed + 101, i) * canvas.width;
+    const y = 44 + seededNoise(seed + 117, i) * 386;
+    const tone = seededNoise(seed + 131, i) > 0.48 ? light : shadow;
+    ctx.fillStyle = `rgba(${colorToRgb(tone)}, ${0.012 + seededNoise(seed + 139, i) * 0.028})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 0.45 + seededNoise(seed + 149, i) * 1.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = `rgba(${colorToRgb(hair)}, 0.86)`;
+  ctx.beginPath();
+  ctx.ellipse(512, 62, 230, 72, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(${colorToRgb(hair)}, 0.72)`;
+  ctx.fillRect(0, 0, 210, 188);
+  ctx.fillRect(814, 0, 210, 188);
+  ctx.fillStyle = `rgba(${colorToRgb(hair)}, 0.36)`;
+  ctx.beginPath();
+  ctx.ellipse(512, 118, 198, 48, 0, 0, Math.PI);
+  ctx.fill();
+
+  ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.22)`;
+  ctx.beginPath();
+  ctx.ellipse(324, 244, 68, 130, -0.2, 0, Math.PI * 2);
+  ctx.ellipse(700, 244, 68, 130, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = `rgba(${colorToRgb(warm)}, 0.2)`;
+  ctx.beginPath();
+  ctx.ellipse(420, 288, 58, 28, -0.1, 0, Math.PI * 2);
+  ctx.ellipse(604, 288, 58, 28, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = `rgba(${colorToRgb(shadow)}, 0.3)`;
+  ctx.lineWidth = 11;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(512, 188);
+  ctx.bezierCurveTo(502, 246, 494, 286, 506, 326);
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(${colorToRgb(light)}, 0.22)`;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(524, 192);
+  ctx.bezierCurveTo(534, 246, 534, 282, 522, 326);
+  ctx.stroke();
+
+  [-1, 1].forEach((side) => {
+    const eyeX = faceX + side * 70;
+    ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.34)`;
+    ctx.beginPath();
+    ctx.ellipse(eyeX, 240, 52, 22, side * -0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255, 248, 239, 0.96)";
+    ctx.beginPath();
+    ctx.ellipse(eyeX, 239, 35, 12, side * -0.05, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgb(${colorToRgb(iris)})`;
+    ctx.beginPath();
+    ctx.arc(eyeX + side * 2, 239, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(8,8,10,0.96)";
+    ctx.beginPath();
+    ctx.arc(eyeX + side * 2, 239, 4.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.beginPath();
+    ctx.arc(eyeX - 4, 235, 2.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${colorToRgb(hair)}, 0.9)`;
+    ctx.lineWidth = 9;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(eyeX - side * 46, 196 + side * 2);
+    ctx.quadraticCurveTo(eyeX, 180, eyeX + side * 47, 196 - side * 3);
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.34)`;
+  ctx.beginPath();
+  ctx.ellipse(478, 332, 12, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(546, 332, 12, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = `rgba(${colorToRgb(lip)}, 0.84)`;
+  ctx.beginPath();
+  ctx.ellipse(512, 390, 56, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.58)`;
+  ctx.fillRect(464, 386, 96, 4);
+
+  const beard = seed % 3 === 0 || seed % 5 === 0;
+  if (beard) {
+    const beardGradient = ctx.createLinearGradient(512, 330, 512, 486);
+    beardGradient.addColorStop(0, `rgba(${colorToRgb(hair)}, 0.04)`);
+    beardGradient.addColorStop(0.5, `rgba(${colorToRgb(hair)}, 0.22)`);
+    beardGradient.addColorStop(1, `rgba(${colorToRgb(hair)}, 0.32)`);
+    ctx.fillStyle = beardGradient;
+    ctx.beginPath();
+    ctx.ellipse(512, 418, 126, 86, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(${colorToRgb(hair)}, 0.3)`;
+    ctx.fillRect(472, 354, 80, 10);
+  }
+
+  ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.18)`;
+  ctx.fillRect(0, 390, 1024, 122);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  return texture;
+}
+
 function createKitBodyTexture(primaryHex, trimHex, seed) {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
@@ -1078,12 +1224,14 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const shadowSkin = skinColor.clone().lerp(new THREE.Color("#2d1715"), 0.22);
   const skinTexture = createSkinTexture(skin, profileSeed);
   const faceTexture = createFaceTexture(skin, `#${hairColor.getHexString()}`, irisHex, profileSeed);
+  const headTexture = createHeadTexture(skin, `#${hairColor.getHexString()}`, irisHex, profileSeed);
   const kitTexture = createKitBodyTexture(shirt, trim, profileSeed);
   const shirtMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", map: kitTexture, roughness: 0.42, metalness: 0.02 });
   const shortsMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.58, metalness: 0.02 });
   const trimMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.46 });
   const skinMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", map: skinTexture, roughness: 0.48, metalness: 0.015 });
   const muscleSkinMaterial = new THREE.MeshStandardMaterial({ color: skinColor.clone().lerp(new THREE.Color("#ffffff"), 0.08), map: skinTexture, roughness: 0.5, metalness: 0.01 });
+  const headMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", map: headTexture, roughness: 0.48, metalness: 0.012 });
   const shadowSkinMaterial = new THREE.MeshStandardMaterial({ color: shadowSkin, roughness: 0.64 });
   const hairMaterial = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.88 });
   const seamMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.38, metalness: 0.02 });
@@ -1202,7 +1350,7 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     group.add(glute);
   });
 
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 18), skinMaterial);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 18), headMaterial);
   neck.position.y = 6.46;
   neck.scale.z = 0.86;
   group.add(neck);
@@ -1215,7 +1363,7 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   number.scale.set(0.72, 0.72, 0.72);
   group.add(number);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 42, 32), skinMaterial);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 48, 36), headMaterial);
   head.position.y = 7.18;
   head.scale.set(0.74 + (profileSeed % 3) * 0.035, 1.08 + (profileSeed % 4) * 0.03, 0.68);
   group.add(head);
@@ -1225,12 +1373,12 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   face.scale.set(1 + (profileSeed % 3) * 0.025, 1, 1);
   group.add(face);
 
-  const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.34, 26, 18), skinMaterial);
+  const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.34, 28, 20), headMaterial);
   jaw.position.set(0, 6.91, 0.1);
   jaw.scale.set(0.84, 0.42, 0.66);
   group.add(jaw);
 
-  const chin = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 12), skinMaterial);
+  const chin = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 12), headMaterial);
   chin.position.set(0, 6.72, 0.34);
   chin.scale.set(1.25, 0.5, 0.6);
   group.add(chin);
@@ -1239,6 +1387,16 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   hair.position.set(0, 7.58, -0.04);
   hair.scale.set(0.92, 0.58, 0.82);
   group.add(hair);
+
+  const rearHair = new THREE.Mesh(new THREE.SphereGeometry(0.43, 28, 16), hairMaterial);
+  rearHair.position.set(0, 7.36, -0.31);
+  rearHair.scale.set(0.92, 0.72, 0.42);
+  group.add(rearHair);
+
+  const nape = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 10), hairMaterial);
+  nape.position.set(0, 7.02, -0.28);
+  nape.scale.set(1.1, 0.5, 0.32);
+  group.add(nape);
 
   [-1, 1].forEach((side) => {
     const fade = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.42, 0.14), hairMaterial);
@@ -1275,7 +1433,7 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   }
 
   [-1, 1].forEach((side) => {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), skinMaterial);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), headMaterial);
     ear.position.set(side * 0.41, 7.18, 0.01);
     ear.scale.set(0.72, 1.18, 0.5);
     group.add(ear);
