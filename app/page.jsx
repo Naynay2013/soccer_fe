@@ -851,6 +851,159 @@ function createSkinTexture(baseHex, seed) {
   return texture;
 }
 
+function colorToRgb(color) {
+  return `${Math.floor(color.r * 255)}, ${Math.floor(color.g * 255)}, ${Math.floor(color.b * 255)}`;
+}
+
+function createFaceTexture(baseHex, hairHex, irisHex, seed) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 768;
+  const ctx = canvas.getContext("2d");
+  const skin = new THREE.Color(baseHex);
+  const hair = new THREE.Color(hairHex);
+  const iris = new THREE.Color(irisHex);
+  const light = skin.clone().lerp(new THREE.Color("#ffd3b5"), 0.28);
+  const warm = skin.clone().lerp(new THREE.Color("#dc806b"), 0.18);
+  const shadow = skin.clone().lerp(new THREE.Color("#1c0e0d"), 0.36);
+  const lip = skin.clone().lerp(new THREE.Color("#70313b"), 0.42);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(256, 368, 178, 276, 0, 0, Math.PI * 2);
+  ctx.clip();
+
+  const baseGlow = ctx.createRadialGradient(222, 232, 18, 252, 360, 330);
+  baseGlow.addColorStop(0, `rgb(${colorToRgb(light)})`);
+  baseGlow.addColorStop(0.58, `rgb(${colorToRgb(skin)})`);
+  baseGlow.addColorStop(1, `rgb(${colorToRgb(shadow)})`);
+  ctx.fillStyle = baseGlow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let i = 0; i < 850; i += 1) {
+    const x = 84 + seededNoise(seed + 3, i) * 344;
+    const y = 96 + seededNoise(seed + 7, i) * 548;
+    const tone = seededNoise(seed + 19, i) > 0.5 ? light : shadow;
+    ctx.fillStyle = `rgba(${colorToRgb(tone)}, ${0.018 + seededNoise(seed + 31, i) * 0.032})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 0.35 + seededNoise(seed + 43, i) * 1.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.28)`;
+  ctx.beginPath();
+  ctx.ellipse(256, 92, 188, 70, 0, Math.PI, 0);
+  ctx.fill();
+
+  ctx.fillStyle = `rgba(${colorToRgb(warm)}, 0.23)`;
+  ctx.beginPath();
+  ctx.ellipse(164, 378, 62, 32, -0.12, 0, Math.PI * 2);
+  ctx.ellipse(348, 378, 62, 32, 0.12, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = `rgba(${colorToRgb(shadow)}, 0.3)`;
+  ctx.lineWidth = 12;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(256, 246);
+  ctx.bezierCurveTo(246, 310, 238, 350, 250, 408);
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(${colorToRgb(light)}, 0.22)`;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(268, 252);
+  ctx.bezierCurveTo(278, 318, 280, 356, 270, 408);
+  ctx.stroke();
+
+  ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.34)`;
+  ctx.beginPath();
+  ctx.ellipse(222, 414, 12, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(290, 414, 12, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  [-1, 1].forEach((side) => {
+    const eyeX = 256 + side * 67;
+    ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.34)`;
+    ctx.beginPath();
+    ctx.ellipse(eyeX, 302, 54, 24, side * -0.06, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255, 248, 238, 0.96)";
+    ctx.beginPath();
+    ctx.ellipse(eyeX, 300, 36, 13, side * -0.05, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgb(${colorToRgb(iris)})`;
+    ctx.beginPath();
+    ctx.arc(eyeX + side * 2, 300, 10.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(8, 8, 10, 0.95)";
+    ctx.beginPath();
+    ctx.arc(eyeX + side * 2, 300, 4.7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    ctx.beginPath();
+    ctx.arc(eyeX - 3, 295, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = `rgba(${colorToRgb(hair)}, 0.9)`;
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(eyeX - side * 45, 252 + side * 2);
+    ctx.quadraticCurveTo(eyeX, 236, eyeX + side * 46, 252 - side * 3);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgba(${colorToRgb(shadow)}, 0.28)`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(eyeX - side * 42, 320);
+    ctx.quadraticCurveTo(eyeX, 330, eyeX + side * 42, 318);
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = `rgba(${colorToRgb(lip)}, 0.82)`;
+  ctx.beginPath();
+  ctx.ellipse(256, 500, 54, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(${colorToRgb(shadow)}, 0.58)`;
+  ctx.fillRect(210, 496, 92, 4);
+  ctx.fillStyle = `rgba(${colorToRgb(lip.clone().lerp(new THREE.Color("#f3a08f"), 0.22))}, 0.7)`;
+  ctx.beginPath();
+  ctx.ellipse(256, 514, 42, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (seed % 3 === 0 || seed % 5 === 0) {
+    const beardGradient = ctx.createLinearGradient(256, 420, 256, 626);
+    beardGradient.addColorStop(0, `rgba(${colorToRgb(hair)}, 0.05)`);
+    beardGradient.addColorStop(0.45, `rgba(${colorToRgb(hair)}, 0.22)`);
+    beardGradient.addColorStop(1, `rgba(${colorToRgb(hair)}, 0.34)`);
+    ctx.fillStyle = beardGradient;
+    ctx.beginPath();
+    ctx.ellipse(256, 536, 128, 116, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(${colorToRgb(hair)}, 0.34)`;
+    ctx.fillRect(216, 452, 80, 12);
+  }
+
+  ctx.restore();
+
+  ctx.strokeStyle = `rgba(${colorToRgb(hair)}, 0.9)`;
+  ctx.lineWidth = 34;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(106, 190);
+  ctx.quadraticCurveTo(256, 70, 406, 190);
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const group = new THREE.Group();
   const profileSeed = (player.jerseyNumber ?? index + 7) + index * 3;
@@ -866,26 +1019,29 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const legLength = 1.58 + (profileSeed % 4) * 0.04;
   const skinColor = new THREE.Color(skin);
   const hairColor = new THREE.Color(hairPalette[profileSeed % hairPalette.length]);
+  const irisHex = ["#2f4b5f", "#3b2a1f", "#1f513d", "#5a3a1e"][profileSeed % 4];
   const lipColor = skinColor.clone().lerp(new THREE.Color("#6f3038"), 0.34);
   const cheekColor = skinColor.clone().lerp(new THREE.Color("#e7a287"), 0.16);
   const shadowSkin = skinColor.clone().lerp(new THREE.Color("#2d1715"), 0.22);
   const skinTexture = createSkinTexture(skin, profileSeed);
+  const faceTexture = createFaceTexture(skin, `#${hairColor.getHexString()}`, irisHex, profileSeed);
   const shirtMaterial = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.44, metalness: 0.02 });
   const shortsMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.58, metalness: 0.02 });
   const trimMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.46 });
   const skinMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", map: skinTexture, roughness: 0.48, metalness: 0.015 });
-  const cheekMaterial = new THREE.MeshStandardMaterial({ color: cheekColor, roughness: 0.54, transparent: true, opacity: 0.88 });
   const shadowSkinMaterial = new THREE.MeshStandardMaterial({ color: shadowSkin, roughness: 0.64 });
-  const lipMaterial = new THREE.MeshStandardMaterial({ color: lipColor, roughness: 0.46 });
   const hairMaterial = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.88 });
-  const stubbleMaterial = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.92, transparent: true, opacity: 0.72 });
   const seamMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.38, metalness: 0.02 });
   const bootMaterial = new THREE.MeshStandardMaterial({ color: profileSeed % 2 ? "#10151b" : "#f5f7ef", roughness: 0.42, metalness: 0.08 });
   const laceMaterial = new THREE.MeshBasicMaterial({ color: profileSeed % 2 ? "#f5f7ef" : "#10151b" });
-  const eyeWhite = new THREE.MeshBasicMaterial({ color: "#fffaf1" });
-  const eyeDark = new THREE.MeshBasicMaterial({ color: "#161616" });
-  const irisMaterial = new THREE.MeshBasicMaterial({ color: ["#2f4b5f", "#3b2a1f", "#1f513d", "#5a3a1e"][profileSeed % 4] });
-  const highlightMaterial = new THREE.MeshBasicMaterial({ color: "#ffffff" });
+  const faceMaterial = new THREE.MeshStandardMaterial({
+    map: faceTexture,
+    transparent: true,
+    roughness: 0.5,
+    metalness: 0.01,
+    polygonOffset: true,
+    polygonOffsetFactor: -1
+  });
 
   const torso = new THREE.Group();
   torso.position.y = 4.86;
@@ -972,6 +1128,11 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   head.scale.set(0.74 + (profileSeed % 3) * 0.035, 1.08 + (profileSeed % 4) * 0.03, 0.68);
   group.add(head);
 
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 1.08, 10, 14), faceMaterial);
+  face.position.set(0, 7.12, 0.372);
+  face.scale.set(1 + (profileSeed % 3) * 0.025, 1, 1);
+  group.add(face);
+
   const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.34, 26, 18), skinMaterial);
   jaw.position.set(0, 6.91, 0.1);
   jaw.scale.set(0.84, 0.42, 0.66);
@@ -1023,95 +1184,15 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
 
   [-1, 1].forEach((side) => {
     const ear = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), skinMaterial);
-    ear.position.set(side * 0.52, 7.18, 0.02);
+    ear.position.set(side * 0.41, 7.18, 0.01);
     ear.scale.set(0.72, 1.18, 0.5);
     group.add(ear);
 
     const innerEar = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), shadowSkinMaterial);
-    innerEar.position.set(side * 0.535, 7.16, 0.05);
+    innerEar.position.set(side * 0.422, 7.16, 0.04);
     innerEar.scale.set(0.42, 0.85, 0.28);
     group.add(innerEar);
-
-    const browRidge = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 10), skinMaterial);
-    browRidge.position.set(side * 0.2, 7.39, 0.43);
-    browRidge.scale.set(1.32, 0.36, 0.28);
-    group.add(browRidge);
-
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.105, 18, 12), eyeWhite);
-    eye.position.set(side * 0.205, 7.25, 0.51);
-    eye.scale.set(1.25, 0.72, 0.46);
-    group.add(eye);
-
-    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), irisMaterial);
-    iris.position.set(side * 0.207, 7.245, 0.585);
-    iris.scale.set(1.0, 0.78, 0.2);
-    group.add(iris);
-
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 8), eyeDark);
-    pupil.position.set(side * 0.208, 7.244, 0.608);
-    group.add(pupil);
-
-    const catchlight = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), highlightMaterial);
-    catchlight.position.set(side * 0.185, 7.268, 0.626);
-    group.add(catchlight);
-
-    const upperLid = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.035, 0.035), shadowSkinMaterial);
-    upperLid.position.set(side * 0.205, 7.31, 0.55);
-    upperLid.rotation.z = -side * 0.03;
-    group.add(upperLid);
-
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.055, 0.055), hairMaterial);
-    brow.position.set(side * 0.205, 7.47, 0.51);
-    brow.rotation.z = -side * (0.08 + (profileSeed % 3) * 0.04);
-    group.add(brow);
-
-    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), cheekMaterial);
-    cheek.position.set(side * 0.28, 7.04, 0.48);
-    cheek.scale.set(1.55, 0.58, 0.58);
-    group.add(cheek);
-
-    const cheekbone = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), skinMaterial);
-    cheekbone.position.set(side * 0.32, 7.12, 0.35);
-    cheekbone.scale.set(1.1, 0.36, 0.5);
-    group.add(cheekbone);
   });
-
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.28 + (profileSeed % 3) * 0.025, 14), skinMaterial);
-  nose.position.set(0, 7.13, 0.58);
-  nose.rotation.x = Math.PI / 2;
-  group.add(nose);
-
-  const noseBridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.07), skinMaterial);
-  noseBridge.position.set(0, 7.29, 0.49);
-  noseBridge.rotation.x = -0.16;
-  group.add(noseBridge);
-
-  const upperLip = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.24, 6, 10), lipMaterial);
-  upperLip.position.set(0, 6.95, 0.58);
-  upperLip.rotation.z = Math.PI / 2;
-  upperLip.scale.set(1.2, 0.5, 0.28);
-  group.add(upperLip);
-
-  const lowerLip = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.3, 6, 10), lipMaterial);
-  lowerLip.position.set(0, 6.87, 0.57);
-  lowerLip.rotation.z = Math.PI / 2;
-  lowerLip.scale.set(1.2, 0.44, 0.24);
-  group.add(lowerLip);
-
-  const mouthShadow = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.025, 0.025), eyeDark);
-  mouthShadow.position.set(0, 6.92, 0.61);
-  group.add(mouthShadow);
-
-  if (profileSeed % 3 === 0 || profileSeed % 5 === 0) {
-    const beard = new THREE.Mesh(new THREE.SphereGeometry(0.42, 22, 12), stubbleMaterial);
-    beard.position.set(0, 6.88, 0.17);
-    beard.scale.set(0.86, 0.4, 0.5);
-    group.add(beard);
-
-    const moustache = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.045), stubbleMaterial);
-    moustache.position.set(0, 7.0, 0.6);
-    group.add(moustache);
-  }
 
   const rig = { arms: [], legs: [], torso, head };
   [-1, 1].forEach((side) => {
