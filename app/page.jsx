@@ -1004,6 +1004,59 @@ function createFaceTexture(baseHex, hairHex, irisHex, seed) {
   return texture;
 }
 
+function createKitBodyTexture(primaryHex, trimHex, seed) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  const primary = new THREE.Color(primaryHex);
+  const trim = new THREE.Color(trimHex);
+  const dark = primary.clone().lerp(new THREE.Color("#020807"), 0.46);
+  const light = primary.clone().lerp(new THREE.Color("#f3fff4"), 0.24);
+  const side = primary.clone().lerp(trim, 0.2);
+
+  const gradient = ctx.createLinearGradient(0, 0, 512, 512);
+  gradient.addColorStop(0, `rgb(${colorToRgb(light)})`);
+  gradient.addColorStop(0.52, `rgb(${colorToRgb(primary)})`);
+  gradient.addColorStop(1, `rgb(${colorToRgb(dark)})`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 512, 512);
+
+  ctx.strokeStyle = `rgba(${colorToRgb(trim)}, 0.28)`;
+  ctx.lineWidth = 5;
+  for (let i = 0; i < 10; i += 1) {
+    const x = 52 + i * 45 + seededNoise(seed, i) * 8;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.bezierCurveTo(x - 20, 130, x + 18, 292, x - 12, 512);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = `rgba(${colorToRgb(side)}, 0.38)`;
+  ctx.beginPath();
+  ctx.ellipse(86, 246, 52, 188, -0.04, 0, Math.PI * 2);
+  ctx.ellipse(426, 246, 52, 188, 0.04, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = `rgba(${colorToRgb(dark)}, 0.23)`;
+  ctx.beginPath();
+  ctx.ellipse(256, 348, 92, 62, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (let i = 0; i < 260; i += 1) {
+    const x = seededNoise(seed + 13, i) * 512;
+    const y = seededNoise(seed + 29, i) * 512;
+    ctx.fillStyle = `rgba(255,255,255,${0.018 + seededNoise(seed + 41, i) * 0.025})`;
+    ctx.fillRect(x, y, 1.2, 1.2);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
 function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const group = new THREE.Group();
   const profileSeed = (player.jerseyNumber ?? index + 7) + index * 3;
@@ -1025,10 +1078,12 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const shadowSkin = skinColor.clone().lerp(new THREE.Color("#2d1715"), 0.22);
   const skinTexture = createSkinTexture(skin, profileSeed);
   const faceTexture = createFaceTexture(skin, `#${hairColor.getHexString()}`, irisHex, profileSeed);
-  const shirtMaterial = new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.44, metalness: 0.02 });
+  const kitTexture = createKitBodyTexture(shirt, trim, profileSeed);
+  const shirtMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", map: kitTexture, roughness: 0.42, metalness: 0.02 });
   const shortsMaterial = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.58, metalness: 0.02 });
   const trimMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.46 });
   const skinMaterial = new THREE.MeshStandardMaterial({ color: "#ffffff", map: skinTexture, roughness: 0.48, metalness: 0.015 });
+  const muscleSkinMaterial = new THREE.MeshStandardMaterial({ color: skinColor.clone().lerp(new THREE.Color("#ffffff"), 0.08), map: skinTexture, roughness: 0.5, metalness: 0.01 });
   const shadowSkinMaterial = new THREE.MeshStandardMaterial({ color: shadowSkin, roughness: 0.64 });
   const hairMaterial = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.88 });
   const seamMaterial = new THREE.MeshStandardMaterial({ color: trim, roughness: 0.38, metalness: 0.02 });
@@ -1061,6 +1116,33 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   waist.position.y = -0.7;
   waist.scale.set(0.88 * buildScale, 0.54, 0.34);
   torso.add(waist);
+
+  const abdomen = new THREE.Mesh(new THREE.SphereGeometry(0.36, 24, 16), shirtMaterial);
+  abdomen.position.set(0, -0.48, 0.27);
+  abdomen.scale.set(1.05 * buildScale, 0.92, 0.24);
+  torso.add(abdomen);
+
+  const backMass = new THREE.Mesh(new THREE.SphereGeometry(0.66, 28, 18), shirtMaterial);
+  backMass.position.set(0, 0.18, -0.28);
+  backMass.scale.set(1.02 * buildScale, 1.04, 0.36);
+  torso.add(backMass);
+
+  const spineLine = new THREE.Mesh(new THREE.CapsuleGeometry(0.025, 1.5, 8, 10), seamMaterial);
+  spineLine.position.set(0, 0.02, -0.58);
+  torso.add(spineLine);
+
+  [-1, 1].forEach((side) => {
+    const lat = new THREE.Mesh(new THREE.SphereGeometry(0.28, 18, 12), shirtMaterial);
+    lat.position.set(side * 0.52 * buildScale, 0.12, -0.23);
+    lat.scale.set(0.72, 1.36, 0.52);
+    torso.add(lat);
+
+    const scapula = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 10), seamMaterial);
+    scapula.position.set(side * 0.33, 0.48, -0.55);
+    scapula.scale.set(1.25, 0.42, 0.16);
+    scapula.rotation.z = side * 0.28;
+    torso.add(scapula);
+  });
 
   const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.18, 0.03), seamMaterial);
   sternum.position.set(0, 0.18, 0.38);
@@ -1096,8 +1178,13 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
 
   const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 16), shortsMaterial);
   pelvis.position.y = 2.84;
-  pelvis.scale.set(1.04 * buildScale, 0.46, 0.48);
+  pelvis.scale.set(1.06 * buildScale, 0.48, 0.56);
   group.add(pelvis);
+
+  const gluteBridge = new THREE.Mesh(new THREE.SphereGeometry(0.5, 22, 14), shortsMaterial);
+  gluteBridge.position.set(0, 2.72, -0.32);
+  gluteBridge.scale.set(1.24 * buildScale, 0.44, 0.38);
+  group.add(gluteBridge);
 
   const shorts = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.52, 0.54), shortsMaterial);
   shorts.position.y = 2.56;
@@ -1108,6 +1195,11 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     shortLeg.position.set(side * 0.28, 2.26, 0.01);
     shortLeg.rotation.z = side * 0.05;
     group.add(shortLeg);
+
+    const glute = new THREE.Mesh(new THREE.SphereGeometry(0.26, 18, 12), shortsMaterial);
+    glute.position.set(side * 0.32, 2.62, -0.42);
+    glute.scale.set(1.08, 0.78, 0.72);
+    group.add(glute);
   });
 
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 18), skinMaterial);
@@ -1203,18 +1295,30 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     sleeve.position.y = -0.3;
     sleeve.scale.set(1.0, 1.0, 0.82);
     armGroup.add(sleeve);
-    const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.115, 0.78, 8, 12), skinMaterial);
+    const deltoid = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 10), shirtMaterial);
+    deltoid.position.set(side * 0.02, -0.28, -0.02);
+    deltoid.scale.set(0.86, 1.1, 0.72);
+    armGroup.add(deltoid);
+    const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.78, 10, 14), muscleSkinMaterial);
     upperArm.position.y = -0.78;
-    upperArm.scale.set(0.9, 1.0, 0.78);
+    upperArm.scale.set(0.92, 1.0, 0.8);
     armGroup.add(upperArm);
+    const tricep = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.62, 8, 10), muscleSkinMaterial);
+    tricep.position.set(0.03 * side, -0.82, -0.12);
+    tricep.scale.set(0.52, 1.0, 0.28);
+    armGroup.add(tricep);
     const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 10), skinMaterial);
     elbow.position.y = -1.22;
     elbow.scale.set(0.88, 0.7, 0.72);
     armGroup.add(elbow);
-    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 1.02, 8, 12), skinMaterial);
+    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.108, 1.02, 10, 14), muscleSkinMaterial);
     forearm.position.y = -1.72;
     forearm.scale.set(0.9, 1.0, 0.76);
     armGroup.add(forearm);
+    const forearmRidge = new THREE.Mesh(new THREE.CapsuleGeometry(0.046, 0.78, 8, 10), muscleSkinMaterial);
+    forearmRidge.position.set(-0.035 * side, -1.72, 0.1);
+    forearmRidge.scale.set(0.4, 1.0, 0.2);
+    armGroup.add(forearmRidge);
     const wrist = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), skinMaterial);
     wrist.position.y = -2.28;
     armGroup.add(wrist);
@@ -1228,33 +1332,65 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     const legGroup = new THREE.Group();
     legGroup.position.set(side * 0.31, 2.55, 0);
     legGroup.rotation.z = side * 0.035;
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, legLength, 8, 14), skinMaterial);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, legLength, 10, 18), muscleSkinMaterial);
     thigh.position.y = -0.72;
-    thigh.scale.set(0.92, 1.0, 0.72);
+    thigh.scale.set(0.96, 1.0, 0.82);
     legGroup.add(thigh);
+
+    const quad = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, legLength * 0.58, 8, 12), muscleSkinMaterial);
+    quad.position.set(0.025 * side, -0.7, 0.16);
+    quad.scale.set(0.82, 1.0, 0.35);
+    legGroup.add(quad);
+
+    const hamstring = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, legLength * 0.66, 8, 12), muscleSkinMaterial);
+    hamstring.position.set(-0.025 * side, -0.76, -0.16);
+    hamstring.scale.set(0.78, 1.0, 0.42);
+    legGroup.add(hamstring);
+
     const knee = new THREE.Mesh(new THREE.SphereGeometry(0.145, 14, 10), skinMaterial);
     knee.position.y = -1.56;
-    knee.scale.set(0.9, 0.68, 0.72);
+    knee.scale.set(0.9, 0.68, 0.78);
     legGroup.add(knee);
-    const sock = new THREE.Mesh(new THREE.CapsuleGeometry(0.135, 1.28, 8, 14), trimMaterial);
+
+    const kneecap = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 8), muscleSkinMaterial);
+    kneecap.position.set(0, -1.53, 0.16);
+    kneecap.scale.set(0.96, 0.52, 0.38);
+    legGroup.add(kneecap);
+
+    const sock = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 1.28, 10, 16), trimMaterial);
     sock.position.y = -2.14;
-    sock.scale.set(0.88, 1.0, 0.7);
+    sock.scale.set(0.9, 1.0, 0.74);
     legGroup.add(sock);
-    const calfShadow = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.72, 8, 10), seamMaterial);
-    calfShadow.position.set(side * -0.03, -2.08, 0.11);
-    calfShadow.scale.set(0.46, 1.0, 0.2);
-    legGroup.add(calfShadow);
+
+    const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.92, 8, 12), trimMaterial);
+    calf.position.set(0.025 * side, -2.12, -0.12);
+    calf.scale.set(0.74, 1.0, 0.48);
+    legGroup.add(calf);
+
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.92, 8, 10), seamMaterial);
+    shin.position.set(-0.02 * side, -2.08, 0.16);
+    shin.scale.set(0.42, 1.0, 0.18);
+    legGroup.add(shin);
+
     const sockBand = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.065, 0.28), seamMaterial);
     sockBand.position.y = -1.62;
     legGroup.add(sockBand);
-    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.72), bootMaterial);
+    const ankle = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.12, 0.22, 12), trimMaterial);
+    ankle.position.y = -2.66;
+    legGroup.add(ankle);
+
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.18, 0.72), bootMaterial);
     boot.position.set(0, -2.78, 0.16);
     boot.rotation.x = -0.08;
     legGroup.add(boot);
-    const toe = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.32), bootMaterial);
+    const toe = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.32), bootMaterial);
     toe.position.set(0, -2.75, 0.52);
     toe.rotation.x = -0.18;
     legGroup.add(toe);
+    const heel = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.18), bootMaterial);
+    heel.position.set(0, -2.76, -0.2);
+    heel.rotation.x = 0.08;
+    legGroup.add(heel);
     const lace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.22), laceMaterial);
     lace.position.set(0, -2.64, 0.28);
     lace.rotation.x = -0.16;
