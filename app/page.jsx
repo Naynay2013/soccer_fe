@@ -860,7 +860,10 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const skinPalette = ["#7b4b33", "#9d6747", "#c4875d", "#e0ad78", "#5d3829", "#b87455", "#d7a06b", "#8f563d"];
   const hairPalette = ["#16100c", "#3a2418", "#6b3f22", "#201713", "#0d0d0e", "#7a4b2b"];
   const skin = player.skinTone ?? skinPalette[profileSeed % skinPalette.length];
-  const buildScale = 0.94 + (profileSeed % 5) * 0.025;
+  const buildScale = 0.96 + (profileSeed % 5) * 0.018;
+  const shoulderWidth = 1.05 + (profileSeed % 4) * 0.045;
+  const torsoHeight = 1.18 + (profileSeed % 3) * 0.035;
+  const legLength = 1.58 + (profileSeed % 4) * 0.04;
   const skinColor = new THREE.Color(skin);
   const hairColor = new THREE.Color(hairPalette[profileSeed % hairPalette.length]);
   const lipColor = skinColor.clone().lerp(new THREE.Color("#6f3038"), 0.34);
@@ -884,84 +887,114 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const irisMaterial = new THREE.MeshBasicMaterial({ color: ["#2f4b5f", "#3b2a1f", "#1f513d", "#5a3a1e"][profileSeed % 4] });
   const highlightMaterial = new THREE.MeshBasicMaterial({ color: "#ffffff" });
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.78, 2.98, 10, 22), shirtMaterial);
-  torso.position.y = 4.72;
-  torso.scale.set(0.88 * buildScale, 1.07, 0.5);
+  const torso = new THREE.Group();
+  torso.position.y = 4.86;
   group.add(torso);
 
-  const chestStripe = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.12, 0.08), trimMaterial);
-  chestStripe.position.set(0, 5.36, 0.55);
-  group.add(chestStripe);
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.82, 34, 22), shirtMaterial);
+  chest.position.y = 0.58;
+  chest.scale.set(shoulderWidth * buildScale, torsoHeight * 0.72, 0.42);
+  torso.add(chest);
 
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.045, 8, 30), seamMaterial);
-  collar.position.set(0, 6.18, 0.34);
-  collar.scale.set(1.25, 0.62, 0.45);
+  const ribs = new THREE.Mesh(new THREE.SphereGeometry(0.58, 28, 18), shirtMaterial);
+  ribs.position.y = -0.08;
+  ribs.scale.set(0.92 * buildScale, 0.88, 0.36);
+  torso.add(ribs);
+
+  const waist = new THREE.Mesh(new THREE.SphereGeometry(0.46, 24, 16), shirtMaterial);
+  waist.position.y = -0.7;
+  waist.scale.set(0.88 * buildScale, 0.54, 0.34);
+  torso.add(waist);
+
+  const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.18, 0.03), seamMaterial);
+  sternum.position.set(0, 0.18, 0.38);
+  torso.add(sternum);
+
+  const clavicle = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.035), seamMaterial);
+  clavicle.position.set(0, 0.96, 0.37);
+  torso.add(clavicle);
+
+  const chestStripe = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.08, 0.05), trimMaterial);
+  chestStripe.position.set(0, 0.5, 0.41);
+  torso.add(chestStripe);
+
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.034, 8, 30), seamMaterial);
+  collar.position.set(0, 1.24, 0.28);
+  collar.scale.set(1.18, 0.58, 0.42);
   collar.rotation.x = Math.PI / 2;
-  group.add(collar);
+  torso.add(collar);
 
   [-1, 1].forEach((side) => {
-    const shoulder = new THREE.Mesh(new THREE.CapsuleGeometry(0.21, 0.76, 8, 14), shirtMaterial);
-    shoulder.position.set(side * 0.82 * buildScale, 5.65, 0.02);
-    shoulder.rotation.z = side * 1.43;
-    shoulder.scale.z = 0.76;
-    group.add(shoulder);
+    const shoulder = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.9, 8, 14), shirtMaterial);
+    shoulder.position.set(side * 0.72 * shoulderWidth * buildScale, 0.86, 0.0);
+    shoulder.rotation.z = side * 1.5;
+    shoulder.scale.z = 0.72;
+    torso.add(shoulder);
 
-    const sidePanel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.68, 0.06), seamMaterial);
-    sidePanel.position.set(side * 0.63 * buildScale, 4.75, 0.48);
-    sidePanel.rotation.z = side * 0.08;
-    group.add(sidePanel);
+    const sidePanel = new THREE.BoxGeometry(0.055, 1.36, 0.045);
+    const sidePanelMesh = new THREE.Mesh(sidePanel, seamMaterial);
+    sidePanelMesh.position.set(side * 0.5 * buildScale, -0.08, 0.36);
+    sidePanelMesh.rotation.z = side * 0.1;
+    torso.add(sidePanelMesh);
   });
 
-  const shorts = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.78, 0.68), shortsMaterial);
-  shorts.position.y = 2.72;
+  const pelvis = new THREE.Mesh(new THREE.SphereGeometry(0.62, 24, 16), shortsMaterial);
+  pelvis.position.y = 2.84;
+  pelvis.scale.set(1.04 * buildScale, 0.46, 0.48);
+  group.add(pelvis);
+
+  const shorts = new THREE.Mesh(new THREE.BoxGeometry(1.08, 0.52, 0.54), shortsMaterial);
+  shorts.position.y = 2.56;
   group.add(shorts);
 
   [-1, 1].forEach((side) => {
-    const shortLeg = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.58, 0.58), shortsMaterial);
-    shortLeg.position.set(side * 0.35, 2.27, 0.01);
+    const shortLeg = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.54, 0.46), shortsMaterial);
+    shortLeg.position.set(side * 0.28, 2.26, 0.01);
     shortLeg.rotation.z = side * 0.05;
     group.add(shortLeg);
   });
 
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 0.48, 16), skinMaterial);
-  neck.position.y = 6.38;
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 18), skinMaterial);
+  neck.position.y = 6.46;
+  neck.scale.z = 0.86;
   group.add(neck);
 
   const number = new THREE.Mesh(
     new THREE.PlaneGeometry(1.2, 1.2),
     new THREE.MeshBasicMaterial({ map: createNumberTexture(player.jerseyNumber, shirt, trim), transparent: true })
   );
-  number.position.set(0, 4.82, 0.6);
+  number.position.set(0, 5.02, 0.48);
+  number.scale.set(0.72, 0.72, 0.72);
   group.add(number);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 42, 32), skinMaterial);
-  head.position.y = 7.2;
-  head.scale.set(0.76 + (profileSeed % 3) * 0.04, 1.06 + (profileSeed % 4) * 0.035, 0.7);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 42, 32), skinMaterial);
+  head.position.y = 7.18;
+  head.scale.set(0.74 + (profileSeed % 3) * 0.035, 1.08 + (profileSeed % 4) * 0.03, 0.68);
   group.add(head);
 
-  const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.44, 26, 18), skinMaterial);
-  jaw.position.set(0, 6.88, 0.1);
-  jaw.scale.set(0.88, 0.46, 0.7);
+  const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.34, 26, 18), skinMaterial);
+  jaw.position.set(0, 6.91, 0.1);
+  jaw.scale.set(0.84, 0.42, 0.66);
   group.add(jaw);
 
-  const chin = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 12), skinMaterial);
-  chin.position.set(0, 6.68, 0.38);
+  const chin = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 12), skinMaterial);
+  chin.position.set(0, 6.72, 0.34);
   chin.scale.set(1.25, 0.5, 0.6);
   group.add(chin);
 
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.65, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), hairMaterial);
-  hair.position.set(0, 7.64, -0.04);
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.52, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.58), hairMaterial);
+  hair.position.set(0, 7.58, -0.04);
   hair.scale.set(0.92, 0.58, 0.82);
   group.add(hair);
 
   [-1, 1].forEach((side) => {
-    const fade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.5, 0.18), hairMaterial);
-    fade.position.set(side * 0.47, 7.38, -0.08);
+    const fade = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.42, 0.14), hairMaterial);
+    fade.position.set(side * 0.38, 7.36, -0.08);
     fade.rotation.z = side * 0.12;
     group.add(fade);
 
     const temple = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), shadowSkinMaterial);
-    temple.position.set(side * 0.45, 7.27, 0.25);
+    temple.position.set(side * 0.36, 7.26, 0.22);
     temple.scale.set(0.55, 1.2, 0.5);
     group.add(temple);
   });
@@ -971,8 +1004,8 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     for (let row = 0; row < 3; row += 1) {
       for (let col = -3; col <= 3; col += 1) {
         if (Math.abs(col) === 3 && row === 2) continue;
-        const curl = new THREE.Mesh(new THREE.SphereGeometry(0.1 + row * 0.012, 10, 8), hairMaterial);
-        curl.position.set(col * 0.13, 7.78 + row * 0.08 - Math.abs(col) * 0.012, 0.08 - row * 0.13);
+        const curl = new THREE.Mesh(new THREE.SphereGeometry(0.078 + row * 0.01, 10, 8), hairMaterial);
+        curl.position.set(col * 0.105, 7.7 + row * 0.07 - Math.abs(col) * 0.01, 0.07 - row * 0.1);
         curl.scale.set(1.0, 0.72, 0.85);
         group.add(curl);
       }
@@ -982,8 +1015,8 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
     bun.position.set(0, 7.54, -0.54);
     group.add(bun);
   } else {
-    const crop = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.18, 0.58), hairMaterial);
-    crop.position.set(0, 7.76, 0.03);
+    const crop = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.14, 0.45), hairMaterial);
+    crop.position.set(0, 7.68, 0.03);
     crop.rotation.x = -0.12;
     group.add(crop);
   }
@@ -1083,50 +1116,66 @@ function makeHumanPlayer(player, jersey, x, z, index = 0) {
   const rig = { arms: [], legs: [], torso, head };
   [-1, 1].forEach((side) => {
     const armGroup = new THREE.Group();
-    armGroup.position.set(side * 0.76 * buildScale, 5.48, 0.02);
-    armGroup.rotation.z = side * 0.23;
-    const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.58, 6, 10), shirtMaterial);
-    sleeve.position.y = -0.32;
+    armGroup.position.set(side * 0.82 * shoulderWidth * buildScale, 5.62, 0.02);
+    armGroup.rotation.z = side * 0.17;
+    const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.58, 8, 12), shirtMaterial);
+    sleeve.position.y = -0.3;
+    sleeve.scale.set(1.0, 1.0, 0.82);
     armGroup.add(sleeve);
-    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 1.2, 6, 10), skinMaterial);
-    forearm.position.y = -1.18;
+    const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.115, 0.78, 8, 12), skinMaterial);
+    upperArm.position.y = -0.78;
+    upperArm.scale.set(0.9, 1.0, 0.78);
+    armGroup.add(upperArm);
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(0.115, 12, 10), skinMaterial);
+    elbow.position.y = -1.22;
+    elbow.scale.set(0.88, 0.7, 0.72);
+    armGroup.add(elbow);
+    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 1.02, 8, 12), skinMaterial);
+    forearm.position.y = -1.72;
+    forearm.scale.set(0.9, 1.0, 0.76);
     armGroup.add(forearm);
-    const wrist = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), skinMaterial);
-    wrist.position.y = -1.9;
+    const wrist = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), skinMaterial);
+    wrist.position.y = -2.28;
     armGroup.add(wrist);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), skinMaterial);
-    hand.position.set(0, -2.06, 0.08);
-    hand.scale.set(0.8, 1.05, 0.52);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), skinMaterial);
+    hand.position.set(0, -2.43, 0.07);
+    hand.scale.set(0.72, 1.08, 0.5);
     armGroup.add(hand);
     rig.arms.push({ group: armGroup, side, hand });
     group.add(armGroup);
 
     const legGroup = new THREE.Group();
-    legGroup.position.set(side * 0.38, 2.36, 0);
-    legGroup.rotation.z = side * 0.045;
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 1.28, 6, 10), skinMaterial);
-    thigh.position.y = -0.62;
+    legGroup.position.set(side * 0.31, 2.55, 0);
+    legGroup.rotation.z = side * 0.035;
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, legLength, 8, 14), skinMaterial);
+    thigh.position.y = -0.72;
+    thigh.scale.set(0.92, 1.0, 0.72);
     legGroup.add(thigh);
-    const knee = new THREE.Mesh(new THREE.SphereGeometry(0.18, 14, 10), skinMaterial);
-    knee.position.y = -1.25;
-    knee.scale.set(0.9, 0.7, 0.78);
+    const knee = new THREE.Mesh(new THREE.SphereGeometry(0.145, 14, 10), skinMaterial);
+    knee.position.y = -1.56;
+    knee.scale.set(0.9, 0.68, 0.72);
     legGroup.add(knee);
-    const sock = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 1.16, 6, 10), trimMaterial);
-    sock.position.y = -1.68;
+    const sock = new THREE.Mesh(new THREE.CapsuleGeometry(0.135, 1.28, 8, 14), trimMaterial);
+    sock.position.y = -2.14;
+    sock.scale.set(0.88, 1.0, 0.7);
     legGroup.add(sock);
-    const sockBand = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.08, 0.38), seamMaterial);
-    sockBand.position.y = -1.12;
+    const calfShadow = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.72, 8, 10), seamMaterial);
+    calfShadow.position.set(side * -0.03, -2.08, 0.11);
+    calfShadow.scale.set(0.46, 1.0, 0.2);
+    legGroup.add(calfShadow);
+    const sockBand = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.065, 0.28), seamMaterial);
+    sockBand.position.y = -1.62;
     legGroup.add(sockBand);
-    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.2, 0.82), bootMaterial);
-    boot.position.set(0, -2.33, 0.16);
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.72), bootMaterial);
+    boot.position.set(0, -2.78, 0.16);
     boot.rotation.x = -0.08;
     legGroup.add(boot);
-    const toe = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.32), bootMaterial);
-    toe.position.set(0, -2.3, 0.54);
+    const toe = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.32), bootMaterial);
+    toe.position.set(0, -2.75, 0.52);
     toe.rotation.x = -0.18;
     legGroup.add(toe);
-    const lace = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.025, 0.24), laceMaterial);
-    lace.position.set(0, -2.18, 0.28);
+    const lace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.22), laceMaterial);
+    lace.position.set(0, -2.64, 0.28);
     lace.rotation.x = -0.16;
     legGroup.add(lace);
     rig.legs.push({ group: legGroup, side, boot, toe, thigh, sock, knee });
@@ -1514,7 +1563,7 @@ function StadiumScene({ setup, running, gameStateRef }) {
             group.rotation.x = THREE.MathUtils.lerp(group.rotation.x, -legPhase * motion * 0.42, 0.18);
             group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, side * (0.04 + motion * 0.012) - keeperDive * 0.25, 0.16);
             boot.rotation.x = THREE.MathUtils.lerp(boot.rotation.x, -0.1 + plant * motion * 0.3, 0.22);
-            boot.position.y = THREE.MathUtils.lerp(boot.position.y, -2.33 + lift * motion * 0.12, 0.22);
+            boot.position.y = THREE.MathUtils.lerp(boot.position.y, -2.78 + lift * motion * 0.1, 0.22);
             toe.rotation.x = THREE.MathUtils.lerp(toe.rotation.x, -0.18 + plant * motion * 0.25, 0.22);
             sock.rotation.x = THREE.MathUtils.lerp(sock.rotation.x, swing * motion * 0.14, 0.18);
             knee.position.z = THREE.MathUtils.lerp(knee.position.z, swing * motion * 0.08, 0.18);
